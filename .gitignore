@@ -1,10 +1,22 @@
+# ── Virtual env & bytecode ─────────────────────────────────
 .venv/
 __pycache__/
+**/__pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# ── Secrets ────────────────────────────────────────────────
 .env
 .env.*
+*.key
+data/mappings/.key
 
-# All runtime data (kept out of git — persisted on Render's disk)
+# ── PDFs (never commit patient/confidential documents) ─────
+*.pdf
+*.PDF
+
+# ── All runtime data (persisted on Render's disk, not git) ─
 data/input/*
 data/extracted/*
 data/anonymized/*
@@ -18,5 +30,7 @@ data/audit.jsonl
 data/approved_terms.jsonl
 !data/**/.gitkeep
 
+# ── Build artefacts ────────────────────────────────────────
 dist/
 *.egg-info/
+.DS_Store
