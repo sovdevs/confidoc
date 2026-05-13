@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: confidoc
+    runtime: docker
+    plan: starter          # $7/month — 512MB RAM, enough without docling
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false        # set this manually in the Render dashboard
+      - key: MAPPING_KEY
+        sync: false        # set this manually — run: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - key: DATA_DIR
+        value: /data
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 8100
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
+      - key: MAX_CONCURRENT_PDFS
+        value: "2"
+      - key: MAX_CONCURRENT_PAGES
+        value: "4"
+    disk:
+      name: confidoc-data
+      mountPath: /data
+      sizeGB: 1            # $0.25/month — stores all jobs, mappings, exports

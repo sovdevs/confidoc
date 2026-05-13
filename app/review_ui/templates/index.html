@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Confidoc — Secure Document Pipeline</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0f1117;
+  --surface:   #1a1d27;
+  --border:    #2a2d3e;
+  --text:      #e2e4f0;
+  --muted:     #7b7f99;
+  --accent:    #5b7cf6;
+  --accent-hl: #7b96ff;
+  --danger:    #e05a5a;
+  --success:   #4caf7d;
+  --warning:   #e5a84e;
+  --sidebar-w: 280px;
+}
+
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+       background: var(--bg); color: var(--text); height: 100vh;
+       display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Header ─────────────────────────────────────────────── */
+header { display: flex; align-items: center; gap: 12px; padding: 0 20px;
+         height: 52px; background: var(--surface); border-bottom: 1px solid var(--border);
+         flex-shrink: 0; }
+header svg { opacity:.7; }
+header h1 { font-size: 16px; font-weight: 700; letter-spacing: .5px; color: var(--text); }
+header span { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+/* ── Layout ─────────────────────────────────────────────── */
+.layout { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+aside { width: var(--sidebar-w); flex-shrink: 0; background: var(--surface);
+        border-right: 1px solid var(--border);
+        display: flex; flex-direction: column; overflow: hidden; }
+
+.sidebar-head { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.sidebar-head h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+                   color: var(--muted); margin-bottom: 10px; }
+
+#job-list { flex: 1; overflow-y: auto; padding: 8px; }
+#job-list::-webkit-scrollbar { width: 4px; }
+#job-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.job-card { padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px;
+            border: 1px solid transparent; transition: background .15s, border-color .15s; }
+.job-card:hover { background: #222536; }
+.job-card.active { background: #1e2340; border-color: var(--accent); }
+.job-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden;
+             text-overflow: ellipsis; }
+.job-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.job-time { font-size: 11px; color: var(--muted); }
+
+/* ── Status badges ───────────────────────────────────────── */
+.badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
+         text-transform: uppercase; letter-spacing: .4px; }
+.badge-pending   { background:#2a2d3e; color:var(--muted); }
+.badge-extracting{ background:#3a3010; color:#e5a84e; }
+.badge-reviewing { background:#0f1f40; color:#5b7cf6; }
+.badge-approved  { background:#0f2a1d; color:#4caf7d; }
+.badge-exporting { background:#3a3010; color:#e5a84e; }
+.badge-done      { background:#0d2a1a; color:#3db86a; }
+.badge-failed    { background:#2a1010; color:#e05a5a; }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+       border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer;
+       border: none; transition: opacity .15s, background .15s; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-hl); }
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-ghost:hover:not(:disabled) { background: #222536; }
+.btn-success { background: #1a4030; color: var(--success); border: 1px solid #2d6048; }
+.btn-success:hover:not(:disabled) { background: #22503c; }
+.btn-danger  { background: #401818; color: var(--danger); border: 1px solid #6a2828; }
+.btn-danger:hover:not(:disabled) { background: #501e1e; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-block { width: 100%; justify-content: center; }
+
+/* ── Main content ────────────────────────────────────────── */
+main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Upload pane ─────────────────────────────────────────── */
+#upload-pane { display: flex; flex-direction: column; align-items: center;
+               justify-content: center; flex: 1; gap: 24px; padding: 40px; }
+
+.drop-zone { width: 100%; max-width: 440px; border: 2px dashed var(--border);
+             border-radius: 14px; padding: 48px 32px; text-align: center;
+             cursor: pointer; transition: border-color .2s, background .2s; }
+.drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: #12162a; }
+.drop-zone svg { opacity: .4; margin-bottom: 14px; }
+.drop-zone p { color: var(--muted); font-size: 14px; }
+.drop-zone strong { color: var(--text); }
+#file-input { display: none; }
+
+.upload-form { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 12px; }
+.form-row { display: flex; gap: 10px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+.form-group label { font-size: 12px; color: var(--muted); }
+.form-group select { background: var(--surface); color: var(--text);
+                     border: 1px solid var(--border); border-radius: 7px;
+                     padding: 7px 10px; font-size: 13px; }
+.selected-file { background: #1a1d27; border: 1px solid var(--border); border-radius: 8px;
+                 padding: 10px 14px; font-size: 13px; display: flex;
+                 align-items: center; gap: 8px; }
+.selected-file .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selected-file button { background: none; border: none; color: var(--muted);
+                        cursor: pointer; padding: 2px; line-height: 1; }
+.selected-file button:hover { color: var(--danger); }
+
+/* ── Detail pane ─────────────────────────────────────────── */
+#detail-pane { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+
+.detail-header { padding: 16px 24px; border-bottom: 1px solid var(--border);
+                 display: flex; align-items: flex-start; gap: 16px; flex-shrink: 0; }
+.detail-header h2 { font-size: 16px; font-weight: 600; }
+.detail-header .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.detail-header .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+.detail-body { flex: 1; display: flex; overflow: hidden; }
+
+/* ── Entity list ─────────────────────────────────────────── */
+.entity-panel { width: 380px; flex-shrink: 0; border-right: 1px solid var(--border);
+                display: flex; flex-direction: column; overflow: hidden; }
+.entity-panel h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+                   color: var(--muted); padding: 14px 16px; border-bottom: 1px solid var(--border);
+                   display: flex; align-items: center; gap: 8px; }
+.entity-panel h3 .count { font-size: 11px; background: var(--border);
+                           border-radius: 10px; padding: 1px 7px; }
+#entity-list { flex: 1; overflow-y: auto; padding: 8px; }
+#entity-list::-webkit-scrollbar { width: 4px; }
+#entity-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.entity-card { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px;
+               overflow: hidden; transition: border-color .15s; }
+.entity-card.approved { border-color: #2d6048; }
+.entity-card.dismissed { border-color: #444; opacity: .55; }
+.entity-card.manual { border-style: dashed; }
+.entity-card.manual .entity-head::after { content: "manual"; font-size: 9px;
+  color: var(--warning); margin-left: auto; letter-spacing: .5px; }
+.entity-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+               background: #15182a; }
+.entity-label { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
+                letter-spacing: .4px; text-transform: uppercase; }
+.lbl-patient_name { background:#3a0f1a; color:#e06080; }
+.lbl-date         { background:#0f1f40; color:#5b7cf6; }
+.lbl-address      { background:#3a1f08; color:#e5933e; }
+.lbl-location     { background:#1a0f3a; color:#9a6be0; }
+.lbl-case_id      { background:#2a2010; color:#d4b84a; }
+.lbl-id_number    { background:#2a0f2a; color:#c06ac0; }
+.lbl-phone        { background:#082a2a; color:#4ac0c0; }
+.lbl-other        { background:#1a1d27; color:var(--muted); }
+
+.entity-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-left: auto; }
+.entity-status-dot.approved { background: var(--success); }
+.entity-status-dot.dismissed { background: var(--muted); }
+.entity-status-dot.pending { background: var(--border); }
+
+.entity-body { padding: 8px 10px; }
+.entity-orig { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.entity-orig strong { color: var(--text); font-weight: 500; }
+.entity-repl { font-size: 12px; color: #9a9fcc; }
+
+.entity-actions { display: flex; gap: 4px; padding: 6px 10px;
+                  border-top: 1px solid var(--border); background: #0f1117; }
+.entity-edit-row { padding: 6px 10px; border-top: 1px solid var(--border);
+                   display: none; gap: 6px; }
+.entity-edit-row input { flex: 1; background: var(--bg); color: var(--text);
+                          border: 1px solid var(--border); border-radius: 5px;
+                          padding: 5px 8px; font-size: 12px; }
+.entity-edit-row input:focus { outline: none; border-color: var(--accent); }
+
+/* ── Text preview ────────────────────────────────────────── */
+.text-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.text-panel h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+                 color: var(--muted); padding: 14px 16px; border-bottom: 1px solid var(--border); }
+#text-preview { flex: 1; overflow-y: auto; padding: 20px 24px;
+                font-size: 13px; line-height: 1.7; white-space: pre-wrap;
+                font-family: "JetBrains Mono", "Fira Code", monospace; }
+#text-preview::-webkit-scrollbar { width: 4px; }
+#text-preview::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+mark.highlight { background: #2a2a10; color: #e5d050; border-radius: 3px;
+                 padding: 0 2px; cursor: pointer; }
+mark.highlight:hover { background: #3a3a18; }
+mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
+                              border-bottom: 2px dashed #6aaa40; }
+
+/* ── Floating entity picker ──────────────────────────────── */
+#entity-picker { position: fixed; z-index: 200; background: var(--surface);
+                 border: 1px solid var(--border); border-radius: 10px;
+                 padding: 10px; display: none; box-shadow: 0 8px 32px #0008;
+                 min-width: 220px; }
+#entity-picker .picker-title { font-size: 11px; color: var(--muted);
+                                margin-bottom: 8px; padding-bottom: 6px;
+                                border-bottom: 1px solid var(--border); }
+#entity-picker .picker-text { font-size: 12px; color: var(--text);
+                               background: var(--bg); border-radius: 5px;
+                               padding: 4px 7px; margin-bottom: 8px;
+                               white-space: nowrap; overflow: hidden;
+                               text-overflow: ellipsis; max-width: 240px; }
+#entity-picker .label-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 8px; }
+#entity-picker .label-btn { font-size: 10px; font-weight: 700; padding: 5px 8px;
+                             border-radius: 6px; cursor: pointer; border: none;
+                             text-transform: uppercase; letter-spacing: .4px; }
+#entity-picker .repl-row { display: flex; gap: 5px; margin-top: 4px; }
+#entity-picker .repl-input { flex: 1; background: var(--bg); color: var(--text);
+                              border: 1px solid var(--border); border-radius: 5px;
+                              padding: 5px 8px; font-size: 12px; }
+#entity-picker .repl-input:focus { outline: none; border-color: var(--accent); }
+#picker-cancel { background: transparent; border: none; color: var(--muted);
+                 cursor: pointer; font-size: 18px; line-height: 1;
+                 position: absolute; top: 8px; right: 10px; }
+
+/* ── OCRCheck pane ───────────────────────────────────────── */
+#ocr-pane { display: none; flex: 1; overflow: hidden; }
+.ocr-body { display: flex; flex: 1; overflow: hidden; height: 100%; }
+.ocr-editor-col { flex: 1; display: flex; flex-direction: column; overflow: hidden;
+                  border-right: 1px solid var(--border); }
+.ocr-editor-col h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+                     color: var(--muted); padding: 12px 16px;
+                     border-bottom: 1px solid var(--border); flex-shrink: 0;
+                     display: flex; align-items: center; gap: 8px; }
+#ocr-textarea { flex: 1; background: var(--bg); color: var(--text);
+                border: none; resize: none; padding: 16px 20px;
+                font-family: "JetBrains Mono","Fira Code",monospace; font-size: 12px;
+                line-height: 1.7; outline: none; }
+.ocr-flags-col { width: 320px; flex-shrink: 0; display: flex; flex-direction: column;
+                 overflow: hidden; }
+.ocr-flags-col h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+                    color: var(--muted); padding: 12px 16px;
+                    border-bottom: 1px solid var(--border); flex-shrink: 0;
+                    display: flex; align-items: center; gap: 8px; }
+#flag-list { flex: 1; overflow-y: auto; padding: 8px; }
+#flag-list::-webkit-scrollbar { width: 4px; }
+#flag-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.flag-card { border: 1px solid var(--border); border-radius: 7px; margin-bottom: 5px;
+             padding: 8px 10px; cursor: pointer; transition: border-color .15s; }
+.flag-card:hover { border-color: var(--accent); }
+.flag-card.error   { border-left: 3px solid var(--danger); }
+.flag-card.warning { border-left: 3px solid var(--warning); }
+.flag-text  { font-size: 12px; font-family: monospace; color: var(--text); margin-bottom: 3px; }
+.flag-msg   { font-size: 11px; color: var(--muted); }
+.flag-sugg  { font-size: 11px; color: var(--success); margin-top: 3px; }
+.flag-apply { font-size: 10px; color: var(--accent); background: none; border: none;
+              cursor: pointer; padding: 0; margin-top: 3px; }
+.flag-apply:hover { text-decoration: underline; }
+.ocr-bar { border-top: 1px solid var(--border); padding: 10px 16px;
+           display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.token-warning { font-size: 12px; color: var(--danger); display: none; }
+
+/* ── View tabs ───────────────────────────────────────────── */
+.view-tabs { display: flex; gap: 4px; }
+.view-tab { font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+            background: none; border: 1px solid var(--border); color: var(--muted); }
+.view-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ── Export section ──────────────────────────────────────── */
+.export-bar { border-top: 1px solid var(--border); padding: 12px 24px;
+              display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.export-bar .dl-links { display: flex; gap: 8px; margin-left: auto; }
+.dl-link { font-size: 12px; color: var(--accent); text-decoration: none; padding: 5px 10px;
+           border: 1px solid var(--border); border-radius: 6px; }
+.dl-link:hover { border-color: var(--accent); }
+
+/* ── Empty / loading states ──────────────────────────────── */
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center;
+         flex: 1; gap: 12px; color: var(--muted); font-size: 14px; }
+.spinner { width: 20px; height: 20px; border: 2px solid var(--border);
+           border-top-color: var(--accent); border-radius: 50%;
+           animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--surface);
+         border: 1px solid var(--border); padding: 12px 16px; border-radius: 8px;
+         font-size: 13px; display: none; z-index: 99; }
+.toast.error { border-color: var(--danger); color: var(--danger); }
+.toast.success { border-color: var(--success); color: var(--success); }
+
+/* ── Processing overlay ──────────────────────────────────── */
+.proc-badge { display: inline-flex; align-items: center; gap: 6px;
+              font-size: 12px; color: var(--warning); }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/>
+    <polyline points="10 9 9 9 8 9"/>
+  </svg>
+  <h1>Confidoc</h1>
+  <span>Secure Document Pipeline</span>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="sidebar-head">
+      <h2>Jobs</h2>
+      <button class="btn btn-primary btn-block" id="new-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Upload PDF
+      </button>
+    </div>
+    <div id="job-list"><div class="empty" style="padding:40px 0"><div class="spinner"></div></div></div>
+    <div style="padding:10px 16px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost btn-block btn-sm" id="import-btn">↑ Import artifact</button>
+    </div>
+  </aside>
+
+  <main>
+    <!-- Upload pane -->
+    <div id="upload-pane">
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept=".pdf">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p><strong>Drop a PDF here</strong></p>
+        <p style="margin-top:6px;font-size:12px;">or click to browse</p>
+      </div>
+
+      <!-- Input folder picker -->
+      <div id="input-picker" style="display:none;width:100%;max-width:440px;flex-direction:column;gap:8px;">
+        <div style="font-size:12px;color:var(--muted);padding:2px 0">PDFs in <code style="background:var(--border);padding:1px 5px;border-radius:4px;font-size:11px">data/input/</code></div>
+        <select id="input-select" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:13px;width:100%">
+          <option value="">— select a file —</option>
+        </select>
+        <div class="form-row" id="input-lang-row" style="display:none">
+          <div class="form-group">
+            <label>Source language</label>
+            <select id="input-src-lang">
+              <option value="de-DE">German (de-DE)</option>
+              <option value="de-AT">German — Austria</option>
+              <option value="de-CH">German — Switzerland</option>
+              <option value="en-US">English (US)</option>
+              <option value="en-GB">English (UK)</option>
+              <option value="fr-FR">French</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Target language</label>
+            <select id="input-tgt-lang">
+              <option value="en-GB">English (UK)</option>
+              <option value="en-US">English (US)</option>
+              <option value="de-DE">German</option>
+              <option value="fr-FR">French</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="process-input-btn" style="display:none">Process Selected PDF</button>
+      </div>
+
+      <!-- Divider -->
+      <div id="upload-divider" style="display:flex;align-items:center;gap:12px;width:100%;max-width:440px;">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-size:11px;color:var(--muted)">OR UPLOAD FROM BROWSER</span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
+
+      <div class="upload-form" id="upload-form" style="display:none">
+        <div class="selected-file">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span class="fname" id="selected-name"></span>
+          <button id="clear-file">✕</button>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Source language</label>
+            <select id="src-lang">
+              <option value="de-DE">German (de-DE)</option>
+              <option value="de-AT">German — Austria</option>
+              <option value="de-CH">German — Switzerland</option>
+              <option value="en-US">English (US)</option>
+              <option value="en-GB">English (UK)</option>
+              <option value="fr-FR">French</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Target language</label>
+            <select id="tgt-lang">
+              <option value="en-GB">English (UK)</option>
+              <option value="en-US">English (US)</option>
+              <option value="de-DE">German</option>
+              <option value="fr-FR">French</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="upload-btn">Upload &amp; Process</button>
+      </div>
+    </div>
+
+    <!-- Import pane (separate from upload) -->
+    <div id="import-pane" style="display:none;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:20px;padding:40px">
+      <div style="width:100%;max-width:440px">
+        <h2 style="font-size:15px;margin-bottom:4px">Import Artifact</h2>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:20px">Resume from any pipeline stage — extracted, pseudonymized, or normalized markdown.</p>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="form-group">
+            <label>Pipeline stage</label>
+            <select id="import-stage" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:13px">
+              <option value="extracted">Extracted markdown → entity review</option>
+              <option value="pseudonymized">Pseudonymized markdown → OCR check</option>
+              <option value="normalized">Normalized markdown → export</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Markdown file (.md)</label>
+            <input type="file" id="import-file" accept=".md"
+                   style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Source language</label>
+              <select id="import-src-lang" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px">
+                <option value="de-DE">German (de-DE)</option>
+                <option value="en-GB">English (UK)</option>
+                <option value="en-US">English (US)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Target language</label>
+              <select id="import-tgt-lang" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px">
+                <option value="en-GB">English (UK)</option>
+                <option value="en-US">English (US)</option>
+                <option value="de-DE">German</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" id="do-import-btn">Import</button>
+            <button class="btn btn-ghost" id="cancel-import-btn">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail pane -->
+    <div id="detail-pane">
+      <div class="detail-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <h2 id="detail-filename"></h2>
+            <span class="badge" id="detail-badge"></span>
+          </div>
+          <div class="meta" id="detail-meta"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+          <div class="view-tabs" id="view-tabs"></div>
+          <div class="actions" id="detail-actions"></div>
+        </div>
+      </div>
+
+      <div class="detail-body">
+        <div class="entity-panel">
+          <h3>
+            Detected Entities
+            <span class="count" id="entity-count">0</span>
+          </h3>
+          <div id="entity-list"></div>
+        </div>
+
+        <div class="text-panel">
+          <h3>Extracted Text <span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:6px">— select text to mark missing entities</span></h3>
+          <div id="text-preview"></div>
+        </div>
+      </div>
+
+      <!-- OCRCheck pane (shown instead of entity/text panels) -->
+      <div id="ocr-pane">
+        <div class="ocr-body">
+          <div class="ocr-editor-col">
+            <h3>
+              Pseudonymized Markdown
+              <span id="ocr-token-warning" class="token-warning">⚠ Token mismatch — stable tokens were modified</span>
+            </h3>
+            <textarea id="ocr-textarea" spellcheck="false"></textarea>
+          </div>
+          <div class="ocr-flags-col">
+            <h3>OCR Flags <span class="count" id="flag-count">0</span></h3>
+            <div id="flag-list"></div>
+          </div>
+        </div>
+        <div class="ocr-bar">
+          <button class="btn btn-ghost btn-sm" id="btn-auto-fix">⚡ Auto-fix unambiguous</button>
+          <button class="btn btn-ghost btn-sm" id="btn-save-draft">Save draft</button>
+          <span id="ocr-save-status" style="font-size:12px;color:var(--muted)"></span>
+          <button class="btn btn-primary btn-sm" id="btn-approve-normalized" style="margin-left:auto">✓ Approve normalized</button>
+        </div>
+      </div>
+
+      <div class="export-bar" id="export-bar" style="display:none">
+        <span id="export-bar-label" style="font-size:13px;color:var(--muted)">Exports ready:</span>
+        <div class="dl-links" id="dl-links"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Floating entity picker (appears on text selection) -->
+<div id="entity-picker">
+  <button id="picker-cancel">×</button>
+  <div class="picker-title">Mark as PII entity</div>
+  <div class="picker-text" id="picker-text"></div>
+  <div class="label-grid" id="picker-labels"></div>
+  <div class="repl-row">
+    <input class="repl-input" id="picker-repl" placeholder="Replacement token, e.g. [NAME]">
+    <button class="btn btn-primary btn-sm" id="picker-confirm">Add</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+// ── State ────────────────────────────────────────────────
+let jobs = [];
+let currentJob = null;
+let pollTimer = null;
+let selectedFile = null;
+let rawText = "";           // raw markdown text of the currently open job
+let pickerSelection = null; // {start, end, text, label, replacement}
+
+// ── DOM refs ─────────────────────────────────────────────
+const jobList      = document.getElementById("job-list");
+const uploadPane   = document.getElementById("upload-pane");
+const detailPane   = document.getElementById("detail-pane");
+const importPane   = document.getElementById("import-pane");
+const dropZone     = document.getElementById("drop-zone");
+const fileInput    = document.getElementById("file-input");
+const uploadForm   = document.getElementById("upload-form");
+const selectedName = document.getElementById("selected-name");
+const clearFileBtn = document.getElementById("clear-file");
+const uploadBtn    = document.getElementById("upload-btn");
+const newBtn       = document.getElementById("new-btn");
+const importBtn    = document.getElementById("import-btn");
+const toast        = document.getElementById("toast");
+let viewMode = "entities"; // "entities" | "ocr"
+let ocrSourceText = "";    // original pseudonymized text for token validation
+
+// ── Toast ─────────────────────────────────────────────────
+function showToast(msg, type = "success") {
+  toast.textContent = msg;
+  toast.className = `toast ${type}`;
+  toast.style.display = "block";
+  setTimeout(() => { toast.style.display = "none"; }, 3000);
+}
+
+// ── Helpers ───────────────────────────────────────────────
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString("en-GB", { dateStyle:"short", timeStyle:"short" });
+}
+
+function badgeClass(status) { return `badge badge-${status}`; }
+
+function labelClass(lbl) {
+  const map = { patient_name:"lbl-patient_name", date:"lbl-date", address:"lbl-address",
+                location:"lbl-location", case_id:"lbl-case_id", id_number:"lbl-id_number",
+                phone:"lbl-phone" };
+  return "entity-label " + (map[lbl.toLowerCase()] || "lbl-other");
+}
+
+function entityStateClass(e) {
+  if (e.approved) return "approved";
+  if (e.approved === false && e.id) {
+    // dismissed = explicitly set false after being interacted with
+    // We track this via a data attribute on the card
+  }
+  return "";
+}
+
+// ── API calls ─────────────────────────────────────────────
+async function api(path, opts={}) {
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const t = await r.text().catch(()=>"");
+    throw new Error(t || r.statusText);
+  }
+  return r.json().catch(()=>null);
+}
+
+// ── Job list ──────────────────────────────────────────────
+async function loadJobs() {
+  try {
+    jobs = await api("/api/jobs");
+    renderJobList();
+  } catch(e) {
+    jobList.innerHTML = `<div class="empty" style="padding:40px 0;color:var(--danger)">Failed to load jobs</div>`;
+  }
+}
+
+function renderJobList() {
+  if (!jobs.length) {
+    jobList.innerHTML = `<div class="empty" style="padding:40px 16px;text-align:center">
+      No jobs yet.<br><span style="font-size:12px;margin-top:4px;display:block">Upload a PDF to get started.</span>
+    </div>`;
+    return;
+  }
+  jobList.innerHTML = jobs.map(j => `
+    <div class="job-card${currentJob?.id === j.id ? " active" : ""}" data-id="${j.id}">
+      <div class="job-name">${escHtml(j.filename)}</div>
+      <div class="job-meta">
+        <span class="${badgeClass(j.status)}">${j.status}</span>
+        <span class="job-time">${fmtTime(j.created_at)}</span>
+      </div>
+    </div>
+  `).join("");
+
+  jobList.querySelectorAll(".job-card").forEach(card => {
+    card.addEventListener("click", () => selectJob(card.dataset.id));
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── Select job ────────────────────────────────────────────
+async function selectJob(id) {
+  clearPoll();
+  try {
+    currentJob = await api(`/api/jobs/${id}`);
+  } catch(e) { showToast("Failed to load job", "error"); return; }
+
+  renderJobList(); // update active highlight
+  showDetailPane();
+  renderDetail();
+
+  if (["pending","extracting","exporting"].includes(currentJob.status)) {
+    startPoll(id);
+  }
+}
+
+function startPoll(id) {
+  pollTimer = setInterval(async () => {
+    try {
+      const j = await api(`/api/jobs/${id}`);
+      currentJob = j;
+      renderDetail();
+      renderJobList();
+      if (!["pending","extracting","exporting"].includes(j.status)) {
+        clearPoll();
+      }
+    } catch(e) { clearPoll(); }
+  }, 2500);
+}
+
+function clearPoll() { clearInterval(pollTimer); pollTimer = null; }
+
+// ── Pane switching ────────────────────────────────────────
+function _hideAll() {
+  uploadPane.style.display = "none";
+  detailPane.style.display = "none";
+  importPane.style.display = "none";
+}
+
+function showUploadPane() {
+  _hideAll();
+  uploadPane.style.display = "flex";
+  currentJob = null;
+  clearPoll();
+  renderJobList();
+}
+
+function showImportPane() {
+  _hideAll();
+  importPane.style.display = "flex";
+  currentJob = null;
+  clearPoll();
+  renderJobList();
+}
+
+function showDetailPane() {
+  _hideAll();
+  detailPane.style.display = "flex";
+}
+
+// ── Detail render ─────────────────────────────────────────
+function renderDetail() {
+  const j = currentJob;
+  document.getElementById("detail-filename").textContent = j.filename;
+  const badge = document.getElementById("detail-badge");
+  badge.className = badgeClass(j.status);
+  badge.textContent = j.status;
+
+  document.getElementById("detail-meta").textContent =
+    `${j.src_lang} → ${j.tgt_lang}  ·  Created ${fmtTime(j.created_at)}` +
+    (j.error ? `  ·  Error: ${j.error}` : "");
+
+  renderViewTabs(j);
+  renderActions(j);
+  renderEntities(j);
+  renderTextPreview(j);
+  renderExportBar(j);
+  // Restore view mode after re-render
+  setViewMode(viewMode, j);
+}
+
+function renderViewTabs(j) {
+  const tabs = document.getElementById("view-tabs");
+  const canNormalize = ["approved","normalizing","normalized","done"].includes(j.status);
+  if (!canNormalize) { tabs.innerHTML = ""; return; }
+  tabs.innerHTML = `
+    <button class="view-tab ${viewMode==="entities"?"active":""}" data-view="entities">Entities</button>
+    <button class="view-tab ${viewMode==="ocr"?"active":""}" data-view="ocr">OCR Check</button>
+  `;
+  tabs.querySelectorAll(".view-tab").forEach(btn =>
+    btn.addEventListener("click", () => { viewMode = btn.dataset.view; renderDetail(); })
+  );
+}
+
+function setViewMode(mode, j) {
+  const entityBody = document.querySelector(".detail-body");
+  const ocrPane    = document.getElementById("ocr-pane");
+  if (mode === "ocr") {
+    entityBody.style.display = "none";
+    ocrPane.style.display = "flex";
+    ocrPane.style.flexDirection = "column";
+    loadOcrPane(j);
+  } else {
+    entityBody.style.display = "flex";
+    ocrPane.style.display = "none";
+  }
+}
+
+function renderActions(j) {
+  const el = document.getElementById("detail-actions");
+  let html = "";
+
+  if (["pending","extracting"].includes(j.status)) {
+    html = `<span class="proc-badge"><span class="spinner"></span>Processing…</span>`;
+  } else if (j.status === "reviewing" || j.status === "approved") {
+    const approved = j.entities.filter(e=>e.approved).length;
+    const total = j.entities.length;
+    html = `
+      <span style="font-size:12px;color:var(--muted)">${approved}/${total} approved</span>
+      <button class="btn btn-ghost btn-sm" id="btn-redetect" title="Re-run with improved patterns">↺ Re-detect</button>
+      <button class="btn btn-ghost btn-sm" id="btn-approve-all">Approve All</button>
+      ${j.reviewed_md ? `<button class="btn btn-ghost btn-sm" id="btn-normalize">OCR Check</button>` : ""}
+      <button class="btn btn-primary btn-sm" id="btn-export">Export</button>
+    `;
+  } else if (j.status === "normalizing") {
+    html = `<button class="btn btn-ghost btn-sm" id="btn-export">Export</button>`;
+  } else if (j.status === "normalized") {
+    html = `
+      <span style="font-size:12px;color:var(--success)">✓ Normalized</span>
+      <button class="btn btn-primary btn-sm" id="btn-export">Export</button>
+    `;
+  } else if (j.status === "exporting") {
+    html = `<span class="proc-badge"><span class="spinner"></span>Exporting…</span>`;
+  } else if (j.status === "done") {
+    html = `<span style="font-size:12px;color:var(--success)">✓ Complete</span>`;
+  } else if (j.status === "failed") {
+    html = `<span style="font-size:12px;color:var(--danger)">✗ Failed</span>`;
+  }
+
+  el.innerHTML = html;
+
+  el.querySelector("#btn-redetect")?.addEventListener("click", redetect);
+  el.querySelector("#btn-approve-all")?.addEventListener("click", approveAll);
+  el.querySelector("#btn-export")?.addEventListener("click", triggerExport);
+  el.querySelector("#btn-normalize")?.addEventListener("click", () => {
+    viewMode = "ocr"; renderDetail();
+  });
+}
+
+function renderEntities(j) {
+  const el = document.getElementById("entity-list");
+  const count = document.getElementById("entity-count");
+
+  if (!j.entities || !j.entities.length) {
+    count.textContent = "0";
+    el.innerHTML = `<div class="empty" style="padding:40px 16px;text-align:center;font-size:13px">
+      No entities detected.<br><span style="font-size:11px;margin-top:6px;display:block;color:var(--muted)">Select text in the preview to add one manually.</span></div>`;
+    return;
+  }
+
+  const manualCount = j.entities.filter(e => e.manual).length;
+  count.textContent = j.entities.length + (manualCount ? ` (${manualCount} manual)` : "");
+  const reviewing = j.status === "reviewing" || j.status === "approved";
+
+  el.innerHTML = j.entities.map((e,i) => {
+    const state = e.approved ? "approved" : (e.dismissed ? "dismissed" : "pending");
+    const manualCls = e.manual ? " manual" : "";
+    return `
+    <div class="entity-card ${state}${manualCls}" data-idx="${i}" data-id="${e.id}">
+      <div class="entity-head">
+        <span class="${labelClass(e.label)}">${e.label}</span>
+        <div class="entity-status-dot ${state}"></div>
+      </div>
+      <div class="entity-body">
+        <div class="entity-orig">Original: <strong>${escHtml(e.text)}</strong></div>
+        <div class="entity-repl">→ ${escHtml(e.replacement)}</div>
+      </div>
+      ${reviewing ? `
+      <div class="entity-actions">
+        <button class="btn btn-success btn-sm" data-action="approve" data-id="${e.id}">✓ Approve</button>
+        <button class="btn btn-danger  btn-sm" data-action="dismiss" data-id="${e.id}">✗ Dismiss</button>
+        <button class="btn btn-ghost   btn-sm" data-action="edit"    data-id="${e.id}" style="margin-left:auto">Edit</button>
+      </div>
+      <div class="entity-edit-row" id="edit-${e.id}">
+        <input type="text" placeholder="${escHtml(e.replacement)}" value="${escHtml(e.replacement)}">
+        <button class="btn btn-primary btn-sm" data-action="save" data-id="${e.id}">Save</button>
+        <button class="btn btn-ghost   btn-sm" data-action="cancel-edit" data-id="${e.id}">✕</button>
+      </div>
+      ` : ""}
+    </div>
+  `;}).join("");
+
+  // Wire up entity action buttons
+  el.querySelectorAll("[data-action]").forEach(btn => {
+    btn.addEventListener("click", handleEntityAction);
+  });
+}
+
+async function handleEntityAction(evt) {
+  const btn = evt.currentTarget;
+  const action = btn.dataset.action;
+  const entityId = btn.dataset.id;
+  const jobId = currentJob.id;
+
+  if (action === "approve") {
+    await api(`/api/jobs/${jobId}/entities/${entityId}/approve`, {method:"POST"});
+    await refreshCurrentJob();
+  } else if (action === "dismiss") {
+    await api(`/api/jobs/${jobId}/entities/${entityId}/dismiss`, {method:"POST"});
+    await refreshCurrentJob();
+  } else if (action === "edit") {
+    const row = document.getElementById(`edit-${entityId}`);
+    if (row) row.style.display = "flex";
+  } else if (action === "cancel-edit") {
+    const row = document.getElementById(`edit-${entityId}`);
+    if (row) row.style.display = "none";
+  } else if (action === "save") {
+    const row = document.getElementById(`edit-${entityId}`);
+    const input = row?.querySelector("input");
+    const replacement = input?.value.trim();
+    if (!replacement) return;
+    const fd = new FormData();
+    fd.append("replacement", replacement);
+    await api(`/api/jobs/${jobId}/entities/${entityId}/edit`, {method:"POST", body:fd});
+    await refreshCurrentJob();
+  }
+}
+
+async function refreshCurrentJob() {
+  try {
+    currentJob = await api(`/api/jobs/${currentJob.id}`);
+    renderDetail();
+    renderJobList();
+  } catch(e) { showToast("Refresh failed", "error"); }
+}
+
+function buildHighlightedHtml(text, entities) {
+  const sorted = [...entities].sort((a, b) => a.start - b.start);
+  let html = "", pos = 0;
+  for (const e of sorted) {
+    if (e.start >= e.end || e.start < pos) continue; // skip bad / overlapping
+    if (e.start > pos) html += escHtml(text.slice(pos, e.start));
+    const baseCls = labelClass(e.label).replace("entity-label ", "");
+    const manualCls = e.manual ? " manual-mark" : "";
+    html += `<mark class="highlight ${baseCls}${manualCls}" title="${e.label}: ${escHtml(e.text)}">${escHtml(text.slice(e.start, e.end))}</mark>`;
+    pos = e.end;
+  }
+  if (pos < text.length) html += escHtml(text.slice(pos));
+  return html;
+}
+
+function renderTextPreview(j) {
+  const el = document.getElementById("text-preview");
+  if (!j.extracted_md) {
+    if (["pending","extracting"].includes(j.status)) {
+      el.innerHTML = `<div class="empty"><div class="spinner"></div><span>Extracting…</span></div>`;
+    } else {
+      el.textContent = "";
+    }
+    rawText = "";
+    return;
+  }
+  fetch(`/api/jobs/${j.id}/md`)
+    .then(r => r.text())
+    .then(text => {
+      if (!text || text.startsWith("{")) { el.textContent = "(Preview not available)"; rawText = ""; return; }
+      rawText = text;
+      el.innerHTML = buildHighlightedHtml(text, j.entities || []);
+    })
+    .catch(() => { el.textContent = "(Could not load preview)"; rawText = ""; });
+}
+
+function renderExportBar(j) {
+  const bar = document.getElementById("export-bar");
+  const links = document.getElementById("dl-links");
+  if (j.status === "done" && (j.exported_tmx || j.exported_csv || j.reviewed_md)) {
+    bar.style.display = "flex";
+    let html = "";
+    if (j.exported_tmx) html += `<a class="dl-link" href="/api/jobs/${j.id}/download/tmx">↓ TMX</a>`;
+    if (j.exported_csv) html += `<a class="dl-link" href="/api/jobs/${j.id}/download/csv">↓ CSV</a>`;
+    if (j.reviewed_md)  html += `<a class="dl-link" href="/api/jobs/${j.id}/download/md">↓ Markdown</a>`;
+    links.innerHTML = html;
+  } else {
+    bar.style.display = "none";
+  }
+}
+
+async function redetect() {
+  const btn = document.getElementById("btn-redetect");
+  if (btn) { btn.disabled = true; btn.textContent = "↺ Detecting…"; }
+  try {
+    currentJob = await api(`/api/jobs/${currentJob.id}/redetect`, {method:"POST"});
+    renderDetail();
+    renderJobList();
+    showToast("Entities re-detected");
+  } catch(e) {
+    showToast(e.message || "Re-detect failed", "error");
+  }
+}
+
+async function approveAll() {
+  try {
+    await api(`/api/jobs/${currentJob.id}/approve-all`, {method:"POST"});
+    await refreshCurrentJob();
+    showToast("All entities approved");
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+async function triggerExport() {
+  const fd = new FormData();
+  fd.append("reviewer", "human");
+  try {
+    currentJob = await api(`/api/jobs/${currentJob.id}/export`, {method:"POST", body:fd});
+    renderDetail();
+    renderJobList();
+    const approved = currentJob.entities.filter(e=>e.approved).length;
+    const manual   = currentJob.entities.filter(e=>e.approved && e.manual).length;
+    showToast(`Export complete — ${approved} terms logged to knowledge base${manual ? ` (${manual} manual)` : ""}`);
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+// ── Text selection → entity picker ───────────────────────
+const picker      = document.getElementById("entity-picker");
+const pickerText  = document.getElementById("picker-text");
+const pickerLabels= document.getElementById("picker-labels");
+const pickerRepl  = document.getElementById("picker-repl");
+const pickerConfirm = document.getElementById("picker-confirm");
+const pickerCancel  = document.getElementById("picker-cancel");
+
+const LABELS = [
+  {label:"PATIENT_NAME", repl:"[PATIENT_NAME]"},
+  {label:"PHYSICIAN_NAME", repl:"[PHYSICIAN_NAME]"},
+  {label:"DATE",         repl:"[DATE]"},
+  {label:"ADDRESS",      repl:"[ADDRESS]"},
+  {label:"LOCATION",     repl:"[LOCATION]"},
+  {label:"CASE_ID",      repl:"[CASE_ID]"},
+  {label:"ID_NUMBER",    repl:"[ID_NUMBER]"},
+  {label:"PHONE",        repl:"[PHONE]"},
+];
+
+function getTextOffset(container, targetNode, targetOffset) {
+  let pos = 0;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    if (walker.currentNode === targetNode) return pos + targetOffset;
+    pos += walker.currentNode.textContent.length;
+  }
+  return pos;
+}
+
+document.getElementById("text-preview").addEventListener("mouseup", (evt) => {
+  if (!currentJob || !rawText) return;
+  if (!["reviewing","approved"].includes(currentJob.status)) return;
+
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hidePicker(); return; }
+  const range = sel.getRangeAt(0);
+  const container = document.getElementById("text-preview");
+  if (!container.contains(range.commonAncestorContainer)) { hidePicker(); return; }
+
+  const start = getTextOffset(container, range.startContainer, range.startOffset);
+  const end   = getTextOffset(container, range.endContainer,   range.endOffset);
+  if (start >= end) { hidePicker(); return; }
+
+  const selectedText = rawText.slice(start, end).trim();
+  if (!selectedText) { hidePicker(); return; }
+
+  pickerSelection = {start, end, text: selectedText, label: LABELS[0].label, replacement: LABELS[0].repl};
+  pickerText.textContent = `"${selectedText}"`;
+  pickerRepl.value = LABELS[0].repl;
+
+  pickerLabels.innerHTML = LABELS.map(({label, repl}) => {
+    const cls = labelClass(label).replace("entity-label ","");
+    return `<button class="label-btn ${cls}" data-label="${label}" data-repl="${repl}">${label}</button>`;
+  }).join("");
+  pickerLabels.querySelectorAll(".label-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      pickerSelection.label = btn.dataset.label;
+      pickerSelection.replacement = btn.dataset.repl;
+      pickerRepl.value = btn.dataset.repl;
+      pickerLabels.querySelectorAll(".label-btn").forEach(b => b.style.outline = "none");
+      btn.style.outline = "2px solid var(--accent)";
+    });
+  });
+  // Pre-select first
+  pickerLabels.querySelector(".label-btn")?.click();
+
+  // Position near mouse
+  const x = Math.min(evt.clientX + 10, window.innerWidth - 270);
+  const y = Math.min(evt.clientY + 10, window.innerHeight - 260);
+  picker.style.left = x + "px";
+  picker.style.top  = y + "px";
+  picker.style.display = "block";
+});
+
+function hidePicker() {
+  picker.style.display = "none";
+  pickerSelection = null;
+}
+
+pickerCancel.addEventListener("click", hidePicker);
+document.addEventListener("keydown", e => { if (e.key === "Escape") hidePicker(); });
+
+pickerConfirm.addEventListener("click", async () => {
+  if (!pickerSelection || !currentJob) return;
+  const repl = pickerRepl.value.trim() || pickerSelection.replacement;
+  const fd = new FormData();
+  fd.append("label",       pickerSelection.label);
+  fd.append("text",        pickerSelection.text);
+  fd.append("start",       pickerSelection.start);
+  fd.append("end",         pickerSelection.end);
+  fd.append("replacement", repl);
+  hidePicker();
+  try {
+    currentJob = await api(`/api/jobs/${currentJob.id}/entities`, {method:"POST", body:fd});
+    renderEntities(currentJob);
+    renderTextPreview(currentJob);
+    renderActions(currentJob);
+    showToast(`Added ${pickerSelection?.label || "entity"} — will survive Re-detect`);
+  } catch(e) {
+    showToast(e.message || "Failed to add entity", "error");
+  }
+});
+
+// ── Upload ────────────────────────────────────────────────
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("drag-over");
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+clearFileBtn.addEventListener("click", () => { selectedFile = null; uploadForm.style.display="none"; dropZone.style.display="flex"; });
+
+function setFile(f) {
+  if (!f.name.toLowerCase().endsWith(".pdf")) { showToast("PDF files only", "error"); return; }
+  selectedFile = f;
+  selectedName.textContent = f.name;
+  uploadForm.style.display = "flex";
+  dropZone.style.display = "none";
+}
+
+uploadBtn.addEventListener("click", async () => {
+  if (!selectedFile) return;
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = "Uploading…";
+
+  const fd = new FormData();
+  fd.append("file", selectedFile);
+  fd.append("src_lang", document.getElementById("src-lang").value);
+  fd.append("tgt_lang", document.getElementById("tgt-lang").value);
+
+  try {
+    const res = await api("/api/upload", {method:"POST", body:fd});
+    showToast("Upload successful — processing started");
+    selectedFile = null;
+    uploadForm.style.display = "none";
+    dropZone.style.display = "flex";
+    fileInput.value = "";
+    await loadJobs();
+    selectJob(res.job_id);
+  } catch(e) {
+    showToast(e.message || "Upload failed", "error");
+  } finally {
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = "Upload & Process";
+  }
+});
+
+newBtn.addEventListener("click", () => { showUploadPane(); loadInputFiles(); });
+importBtn.addEventListener("click", showImportPane);
+document.getElementById("cancel-import-btn").addEventListener("click", showUploadPane);
+
+// ── Artifact import ───────────────────────────────────────
+document.getElementById("do-import-btn").addEventListener("click", async () => {
+  const fileEl = document.getElementById("import-file");
+  const f = fileEl.files?.[0];
+  if (!f) { showToast("Select a .md file first", "error"); return; }
+  const btn = document.getElementById("do-import-btn");
+  btn.disabled = true; btn.textContent = "Importing…";
+  const fd = new FormData();
+  fd.append("file", f);
+  fd.append("stage", document.getElementById("import-stage").value);
+  fd.append("src_lang", document.getElementById("import-src-lang").value);
+  fd.append("tgt_lang", document.getElementById("import-tgt-lang").value);
+  try {
+    const res = await api("/api/import", {method:"POST", body:fd});
+    showToast(`Imported as ${res.status}`);
+    fileEl.value = "";
+    await loadJobs();
+    selectJob(res.job_id);
+  } catch(e) {
+    showToast(e.message || "Import failed", "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Import";
+  }
+});
+
+// ── Input folder picker ───────────────────────────────────
+const inputPicker    = document.getElementById("input-picker");
+const inputSelect    = document.getElementById("input-select");
+const inputLangRow   = document.getElementById("input-lang-row");
+const processInputBtn= document.getElementById("process-input-btn");
+
+async function loadInputFiles() {
+  try {
+    const data = await api("/api/inputs");
+    inputSelect.innerHTML = `<option value="">— select a file —</option>` +
+      data.files.map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join("");
+    if (data.files.length > 0) {
+      inputPicker.style.display = "flex";
+    } else {
+      inputPicker.style.display = "none";
+    }
+  } catch(e) {
+    inputPicker.style.display = "none";
+  }
+}
+
+inputSelect.addEventListener("change", () => {
+  const chosen = inputSelect.value;
+  inputLangRow.style.display  = chosen ? "flex" : "none";
+  processInputBtn.style.display = chosen ? "inline-flex" : "none";
+});
+
+processInputBtn.addEventListener("click", async () => {
+  const filename = inputSelect.value;
+  if (!filename) return;
+  processInputBtn.disabled = true;
+  processInputBtn.textContent = "Starting…";
+
+  const fd = new FormData();
+  fd.append("src_lang", document.getElementById("input-src-lang").value);
+  fd.append("tgt_lang", document.getElementById("input-tgt-lang").value);
+
+  try {
+    const res = await api(`/api/inputs/${encodeURIComponent(filename)}/process`, {method:"POST", body:fd});
+    showToast("Processing started");
+    await loadJobs();
+    selectJob(res.job_id);
+  } catch(e) {
+    showToast(e.message || "Failed to start processing", "error");
+  } finally {
+    processInputBtn.disabled = false;
+    processInputBtn.textContent = "Process Selected PDF";
+  }
+});
+
+// ── OCRCheck pane ─────────────────────────────────────────
+const ocrTextarea  = document.getElementById("ocr-textarea");
+const flagList     = document.getElementById("flag-list");
+const flagCount    = document.getElementById("flag-count");
+const ocrWarning   = document.getElementById("ocr-token-warning");
+const ocrStatus    = document.getElementById("ocr-save-status");
+let ocrSaveTimer   = null;
+
+const TOKEN_RE = /\[[A-Z][A-Z_]*_\d{3}\]/g;
+
+function extractTokens(text) { return text.match(TOKEN_RE) || []; }
+
+function tokensMatch(a, b) {
+  const sort = t => [...t].sort().join(",");
+  return sort(extractTokens(a)) === sort(extractTokens(b));
+}
+
+async function loadOcrPane(j) {
+  if (!j.reviewed_md && !j.normalized_md) return;
+  ocrTextarea.value = "";
+  flagList.innerHTML = `<div class="empty" style="padding:20px"><div class="spinner"></div></div>`;
+
+  // Start normalization if not yet entered (approved jobs, or any status without a normalized draft)
+  if (j.status === "approved" || (!j.normalized_md && j.status !== "normalizing" && j.status !== "normalized" && j.status !== "done")) {
+    try {
+      const res = await api(`/api/jobs/${j.id}/normalize/start`, {method:"POST"});
+      ocrSourceText = res.markdown;
+      ocrTextarea.value = res.markdown;
+      currentJob = res.job;
+      renderJobList();
+      renderFlags(res.flags);
+    } catch(e) { showToast(e.message, "error"); return; }
+  } else {
+    try {
+      const res = await api(`/api/jobs/${j.id}/normalize`);
+      ocrSourceText = res.markdown;
+      ocrTextarea.value = res.markdown;
+      renderFlags(res.flags);
+    } catch(e) { showToast(e.message, "error"); return; }
+  }
+
+  ocrWarning.style.display = "none";
+}
+
+function renderFlags(flags) {
+  flagCount.textContent = flags.length;
+  if (!flags.length) {
+    flagList.innerHTML = `<div class="empty" style="padding:30px 16px;text-align:center;font-size:13px;color:var(--success)">✓ No issues found</div>`;
+    return;
+  }
+  flagList.innerHTML = flags.map((f,i) => `
+    <div class="flag-card ${f.severity}" data-idx="${i}" data-start="${f.start}" data-end="${f.end}">
+      <div class="flag-text">${escHtml(f.text)}</div>
+      <div class="flag-msg">${escHtml(f.message)}</div>
+      ${f.suggestion != null ? `<div class="flag-sugg">→ ${escHtml(f.suggestion)}</div>
+        <button class="flag-apply" data-start="${f.start}" data-end="${f.end}" data-sugg="${escHtml(f.suggestion)}">Apply suggestion</button>` : ""}
+    </div>
+  `).join("");
+
+  // Click flag → jump to position in textarea
+  flagList.querySelectorAll(".flag-card").forEach(card => {
+    card.addEventListener("click", (e) => {
+      if (e.target.classList.contains("flag-apply")) return;
+      const s = +card.dataset.start, end = +card.dataset.end;
+      ocrTextarea.focus();
+      ocrTextarea.setSelectionRange(s, end);
+      // Scroll to position (approximate)
+      const lineHeight = 21;
+      const lines = ocrTextarea.value.slice(0, s).split("\n").length;
+      ocrTextarea.scrollTop = (lines - 3) * lineHeight;
+    });
+  });
+
+  // Apply suggestion buttons
+  flagList.querySelectorAll(".flag-apply").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const s = +btn.dataset.start, end = +btn.dataset.end;
+      const sugg = btn.dataset.sugg;
+      const text = ocrTextarea.value;
+      ocrTextarea.value = text.slice(0, s) + sugg + text.slice(end);
+      scheduleOcrSave();
+    });
+  });
+}
+
+// Token validation while typing
+ocrTextarea.addEventListener("input", () => {
+  const mismatch = ocrSourceText && !tokensMatch(ocrSourceText, ocrTextarea.value);
+  ocrWarning.style.display = mismatch ? "block" : "none";
+  scheduleOcrSave();
+});
+
+function scheduleOcrSave() {
+  clearTimeout(ocrSaveTimer);
+  ocrStatus.textContent = "Unsaved…";
+  ocrSaveTimer = setTimeout(saveOcrDraft, 1800);
+}
+
+async function saveOcrDraft() {
+  if (!currentJob) return;
+  const text = ocrTextarea.value;
+  try {
+    const res = await api(`/api/jobs/${currentJob.id}/normalize`, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({markdown: text}),
+    });
+    ocrStatus.textContent = "Saved";
+    setTimeout(() => { ocrStatus.textContent = ""; }, 2000);
+    renderFlags(res.flags);
+  } catch(e) {
+    ocrStatus.textContent = "";
+    showToast(e.message || "Save failed", "error");
+  }
+}
+
+document.getElementById("btn-auto-fix").addEventListener("click", async () => {
+  if (!currentJob) return;
+  const res = await api(`/api/jobs/${currentJob.id}/normalize/auto`, {method:"POST"});
+  ocrTextarea.value = (await api(`/api/jobs/${currentJob.id}/normalize`)).markdown;
+  renderFlags(res.flags);
+  showToast(`Auto-fixed ${res.fixes_applied} issues — ${res.remaining_flags} remain`);
+});
+
+document.getElementById("btn-save-draft").addEventListener("click", saveOcrDraft);
+
+document.getElementById("btn-approve-normalized").addEventListener("click", async () => {
+  if (!currentJob) return;
+  if (ocrSourceText && !tokensMatch(ocrSourceText, ocrTextarea.value)) {
+    showToast("Cannot approve — stable tokens were modified", "error"); return;
+  }
+  await saveOcrDraft();
+  try {
+    currentJob = await api(`/api/jobs/${currentJob.id}/normalize/approve`, {method:"POST"});
+    renderDetail();
+    renderJobList();
+    showToast("Normalization approved — ready for export");
+  } catch(e) { showToast(e.message, "error"); }
+});
+
+// ── Init ──────────────────────────────────────────────────
+(async () => {
+  await loadJobs();
+  if (jobs.length > 0) {
+    selectJob(jobs[0].id);
+  } else {
+    // Show upload pane and load input files on first run
+    loadInputFiles();
+  }
+})();
+</script>
+</body>
+</html>

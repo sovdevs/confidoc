@@ -1,0 +1,9 @@
+.venv
+data/
+__pycache__
+**/__pycache__
+*.pyc
+.env
+.env.*
+data/mappings/
+data/approved_terms.jsonl

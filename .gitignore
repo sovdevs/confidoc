@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+
+# All runtime data (kept out of git — persisted on Render's disk)
+data/input/*
+data/extracted/*
+data/anonymized/*
+data/reviewed/*
+data/normalized/*
+data/exported/*
+data/final/*
+data/jobs/*
+data/mappings/*
+data/audit.jsonl
+data/approved_terms.jsonl
+!data/**/.gitkeep
+
+dist/
+*.egg-info/
