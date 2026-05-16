@@ -12,6 +12,7 @@ RUN uv sync --no-dev --frozen
 
 # App code
 COPY app/ app/
+COPY profiles/ profiles/
 
 # Static demo inputs and pre-captured playback artifacts (synthetic only — no real PHI)
 COPY data/demo/ data/demo/
