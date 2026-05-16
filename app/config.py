@@ -48,9 +48,11 @@ class Settings:
     # Regular BYOK uploads are unaffected — they still require the user's own key.
     demo_api_key: str = os.getenv("CONFIDOC_DEMO_API_KEY", "")
 
-    # Demo input documents (synthetic only — no real PHI)
-    demo_dir: Path = DATA / "demo"
-    # Demo run artifact storage
+    # Demo input documents (synthetic only — no real PHI).
+    # Always relative to the repo root, not DATA_DIR — these are static app
+    # assets committed to git, not user-generated data on the mounted disk.
+    demo_dir: Path = ROOT / "data" / "demo"
+    # Demo run artifact storage (on the persistent disk alongside other runtime data)
     demo_runs_dir: Path = DATA / "demo_runs"
 
     # ── Concurrency ───────────────────────────────────────────────────────────
@@ -82,7 +84,7 @@ class Settings:
             self.zone1_previews_dir,
         ]
         if self.demo_capture:
-            dirs += [self.demo_dir, self.demo_runs_dir]
+            dirs += [self.demo_runs_dir]
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
 
