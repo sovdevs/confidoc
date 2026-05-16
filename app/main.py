@@ -67,8 +67,9 @@ def config():
         "pdf_model":    settings.pdf_model,
         "anon_provider": settings.anon_provider,
         "anon_model":    settings.anon_model,
-        "byok_only":     settings.byok_only,
-        "demo_capture":  settings.demo_capture,
+        "byok_only":          settings.byok_only,
+        "demo_capture":       settings.demo_capture,
+        "demo_key_available": bool(settings.demo_api_key),
     }
 
 

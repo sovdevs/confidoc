@@ -1167,9 +1167,13 @@ async def process_demo_input(
     run_id = demo_capture.start_demo_run(job.id, label=f"Demo: {filename}")
     audit_log.log(job.id, "DEMO_CAPTURE_STARTED", {"demo_run_id": run_id})
 
+    # Use the server-side demo key if no user key was supplied.
+    # This lets the demo run without the viewer entering any credentials.
+    effective_api_key = pdf_api_key or settings.demo_api_key or None
+
     background_tasks.add_task(
         _run_ingest_and_detect, job, pdf_bytes,
-        pdf_provider or None, pdf_model or None, pdf_api_key or None,
+        pdf_provider or None, pdf_model or None, effective_api_key,
     )
     return {"job_id": job.id, "demo_run_id": run_id, "status": job.status}
 

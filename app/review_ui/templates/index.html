@@ -564,7 +564,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
                     style="background:var(--surface);color:var(--text);border:1px solid #2563eb55;border-radius:7px;padding:8px 10px;font-size:12px;width:100%">
               <option value="">— select demo document —</option>
             </select>
-            <div style="font-size:11px;color:var(--muted);margin-top:5px">Demo capture starts automatically when you process a demo document.</div>
+            <div id="demo-key-hint" style="font-size:11px;color:var(--muted);margin-top:5px">Demo capture starts automatically when you process a demo document.</div>
           </div>
 
           <!-- Selected file indicator (shown when any source is chosen) -->
@@ -2533,11 +2533,13 @@ function renderPolicyResults(data) {
 
 // ── Demo capture ──────────────────────────────────────────
 let _demoCapture = false;   // set from /api/config
+let _demoKeyAvailable = false;  // server-side demo key configured
 let _activeDemoRunId = null;
 
 async function initDemoCapture(cfg) {
   if (!cfg.demo_capture) return;
   _demoCapture = true;
+  _demoKeyAvailable = !!cfg.demo_key_available;
   const panel = document.getElementById("demo-panel");
   if (panel) panel.style.display = "block";
   const demoTab = document.getElementById("src-tab-demo");
@@ -2558,6 +2560,14 @@ async function loadDemoFiles() {
       opt.value = f; opt.textContent = f;
       sel.appendChild(opt);
     });
+    // Update hint based on whether demo key is available
+    const hint = document.getElementById("demo-key-hint");
+    if (hint) {
+      hint.innerHTML = _demoKeyAvailable
+        ? '&#10003; <strong>No API key required</strong> — demo key is pre-configured.'
+        : '&#9888; No demo key configured. You will need to enter an API key in step 2.';
+      hint.style.color = _demoKeyAvailable ? "#16a34a" : "var(--warning)";
+    }
   } catch(_) {}
 }
 
@@ -2626,7 +2636,9 @@ runBtn.addEventListener("click", async function(e) {
   const origHTML = runBtn.innerHTML;
   runBtn.disabled = true;
   runBtn.textContent = "Processing (demo)…";
-  const fd = ocrFormData();
+  // When a server-side demo key is configured, send no key at all — the server uses its own.
+  // When no demo key is configured, include whatever the user typed in step 2.
+  const fd = _demoKeyAvailable ? new FormData() : ocrFormData();
   fd.append("src_lang", document.getElementById("src-lang")?.value || "de-DE");
   fd.append("tgt_lang", document.getElementById("tgt-lang")?.value || "en-GB");
   try {

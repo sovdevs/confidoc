@@ -43,6 +43,11 @@ class Settings:
     # reproducible demo playback. Default off; never enable in production.
     demo_capture: bool = os.getenv("CONFIDOC_DEMO_CAPTURE", "false").lower() == "true"
 
+    # Server-side key used exclusively for demo document processing.
+    # Set this on Render so demo documents run without the viewer entering a key.
+    # Regular BYOK uploads are unaffected — they still require the user's own key.
+    demo_api_key: str = os.getenv("CONFIDOC_DEMO_API_KEY", "")
+
     # Demo input documents (synthetic only — no real PHI)
     demo_dir: Path = DATA / "demo"
     # Demo run artifact storage
