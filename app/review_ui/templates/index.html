@@ -2156,6 +2156,15 @@ async function runPolicyPrepare() {
   }
 }
 
+const _FILE_ICON = {
+  ".tmx":"📄", ".xliff":"📄", ".sdlxliff":"📄", ".docx":"📝",
+  ".csv":"📊", ".md":"📃", ".zip":"📦", ".json":"📋",
+};
+const _FILE_LABEL = {
+  ".tmx":"TMX", ".xliff":"XLIFF", ".sdlxliff":"SDL XLIFF",
+  ".docx":"DOCX", ".csv":"CSV", ".md":"Markdown", ".zip":"ZIP",
+};
+
 async function loadExportHistory(jobId) {
   const histEl = document.getElementById("pe-history");
   const listEl = document.getElementById("pe-history-list");
@@ -2175,23 +2184,50 @@ async function loadExportHistory(jobId) {
       translation:"Translation", clinical_summary:"LLM Clinical",
       ml_feature_extraction:"LLM Extraction", research_extract:"Research", public_release:"Public release",
     };
-    listEl.innerHTML = data.packages.map(pkg => `
+
+    // Fetch file lists for all packages in parallel
+    const fileListMap = {};
+    await Promise.allSettled(data.packages.map(async pkg => {
+      try {
+        const r = await api(`/api/policy/packages/${pkg.package_id}/files`);
+        fileListMap[pkg.package_id] = r.files || [];
+      } catch { fileListMap[pkg.package_id] = []; }
+    }));
+
+    listEl.innerHTML = data.packages.map(pkg => {
+      const files = fileListMap[pkg.package_id] || [];
+      const fileLinks = files
+        .filter(f => !f.name.endsWith(".json"))  // reports shown via Report link
+        .map(f => {
+          const ext = f.name.includes(".") ? "." + f.name.split(".").pop() : "";
+          const icon  = _FILE_ICON[ext]  || "📎";
+          const label = _FILE_LABEL[ext] || ext.slice(1).toUpperCase();
+          return `<a href="/api/policy/packages/${escHtml(pkg.package_id)}/files/${escHtml(f.name)}"
+                     download="${escHtml(f.name)}" target="_blank"
+                     style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:var(--border);border-radius:4px;font-size:11px;color:var(--text);text-decoration:none"
+                     title="${escHtml(f.name)}">${icon} ${label}</a>`;
+        }).join("");
+
+      return `
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <strong>${escHtml(PURPOSE_LABEL[pkg.profile] || pkg.task)}</strong>
           <span style="color:var(--muted)">→ ${escHtml(pkg.consumer_type)}</span>
           <span style="background:var(--border);padding:1px 6px;border-radius:4px;font-size:10px">${escHtml(pkg.strictness)}</span>
           ${recBadge(pkg.recommended_action)}
           <span style="margin-left:auto;font-size:11px;color:var(--muted)">${fmtTime(pkg.created_at)}</span>
         </div>
-        <div style="display:flex;align-items:center;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <span style="color:var(--muted)">Risk: <strong class="${pkg.risk_level==="low"?"risk-low":pkg.risk_level==="medium"?"risk-medium":"risk-high"}">${peEsc(pkg.risk_level||"—").toUpperCase()}</strong></span>
           <span style="color:var(--muted)">Usefulness: <strong>${pkg.usefulness_score!=null ? (pkg.usefulness_score*100).toFixed(0)+"%" : "—"}</strong></span>
-          <a href="/api/policy/packages/${escHtml(pkg.package_id)}/download" class="btn btn-success btn-sm" style="margin-left:auto" target="_blank">↓ Download</a>
-          <a href="/api/policy/packages/${escHtml(pkg.package_id)}/report" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">Report ↗</a>
+          <a href="/api/policy/packages/${escHtml(pkg.package_id)}/report" target="_blank"
+             style="margin-left:auto;font-size:11px;color:var(--accent);text-decoration:none">Report ↗</a>
+          <a href="/api/policy/packages/${escHtml(pkg.package_id)}/download" target="_blank"
+             class="btn btn-ghost btn-sm" style="font-size:11px">↓ ZIP</a>
         </div>
-      </div>
-    `).join("");
+        ${fileLinks ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${fileLinks}</div>` : ""}
+      </div>`;
+    }).join("");
     histEl.style.display = "flex";
     histEl.style.flexDirection = "column";
   } catch(e) {

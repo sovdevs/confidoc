@@ -712,16 +712,48 @@ def policy_prepare(body: PolicyPrepareBody):
     except Exception as e:
         raise HTTPException(500, f"Policy engine error: {e}")
 
-    # For translation packages, also generate a TMX from the prepared segments
-    if body.task == "translation" and body.tgt_lang:
-        from app.policy_engine.package import _packages_dir
-        from pdf_to_markdown.exporter import md_to_segments, write_tmx
-        pkg_dir = _packages_dir() / pkg.package_id
-        prepared_path = pkg_dir / "prepared.md"
-        if prepared_path.exists():
-            segments = md_to_segments(prepared_path.read_text(encoding="utf-8"))
-            tmx_path = pkg_dir / f"{Path(job.filename).stem}.tmx"
-            write_tmx(segments, job.src_lang, body.tgt_lang, tmx_path)
+    # Generate supplementary export files inside the package directory
+    from app.policy_engine.package import _packages_dir
+    from pdf_to_markdown.exporter import md_to_segments, write_tmx
+    from app.services.xliff_export import xliff_12, sdlxliff_12
+    from app.services.docx_export import md_to_docx
+    import csv as _csv
+
+    pkg_dir = _packages_dir() / pkg.package_id
+    prepared_path = pkg_dir / "prepared.md"
+    stem = Path(job.filename).stem
+
+    if prepared_path.exists():
+        prepared_md = prepared_path.read_text(encoding="utf-8")
+        segments = md_to_segments(prepared_md)
+        tgt = body.tgt_lang or job.tgt_lang or "und"
+
+        # CSV (source segments) — all packages
+        csv_path = pkg_dir / f"{stem}.csv"
+        with csv_path.open("w", encoding="utf-8", newline="") as f:
+            writer = _csv.writer(f, quoting=_csv.QUOTE_ALL)
+            writer.writerow(["id", job.src_lang])
+            for i, seg in enumerate(segments, 1):
+                writer.writerow([i, seg])
+
+        if body.task == "translation":
+            # TMX — bilingual translation memory
+            write_tmx(segments, job.src_lang, tgt, pkg_dir / f"{stem}.tmx")
+
+            # XLIFF 1.2 — generic CAT tool format
+            (pkg_dir / f"{stem}.xliff").write_bytes(
+                xliff_12(segments, job.src_lang, tgt, original=f"{stem}.md")
+            )
+
+            # SDL XLIFF — Trados Studio compatible
+            (pkg_dir / f"{stem}.sdlxliff").write_bytes(
+                sdlxliff_12(segments, job.src_lang, tgt, original=f"{stem}.md")
+            )
+
+            # DOCX — Word document for translators
+            (pkg_dir / f"{stem}.docx").write_bytes(
+                md_to_docx(prepared_md, job.src_lang, tgt, title=stem)
+            )
 
     audit_log.log(job.id, "POLICY_PACKAGE_CREATED_VIA_UI", {
         "package_id": pkg.package_id,
@@ -772,6 +804,48 @@ def list_job_packages(job_id: str):
 
     results.sort(key=lambda x: x["created_at"], reverse=True)
     return {"packages": results}
+
+
+@router.get("/api/policy/packages/{package_id}/files")
+def package_files(package_id: str):
+    """List downloadable files inside a package (Zone 2 safe files only)."""
+    from app.policy_engine.package import _packages_dir
+    _SAFE_EXTS = {".md", ".tmx", ".xliff", ".sdlxliff", ".docx", ".csv",
+                  ".json", ".zip"}
+    _SKIP = {"manifest.json"}  # served via /report instead
+    pkg_dir = _packages_dir() / package_id
+    if not pkg_dir.exists():
+        raise HTTPException(404, "Package not found")
+    files = []
+    for p in sorted(pkg_dir.iterdir()):
+        if p.suffix in _SAFE_EXTS and p.name not in _SKIP and p.is_file():
+            files.append({"name": p.name, "size": p.stat().st_size})
+    return {"files": files}
+
+
+@router.get("/api/policy/packages/{package_id}/files/{filename}")
+def package_file_download(package_id: str, filename: str):
+    """Download a specific file from a package."""
+    from app.policy_engine.package import _packages_dir
+    _SAFE_EXTS = {".md", ".tmx", ".xliff", ".sdlxliff", ".docx", ".csv", ".json", ".zip"}
+    pkg_dir = _packages_dir() / package_id
+    if not pkg_dir.exists():
+        raise HTTPException(404, "Package not found")
+    # Prevent path traversal
+    file_path = (pkg_dir / filename).resolve()
+    if not str(file_path).startswith(str(pkg_dir.resolve())):
+        raise HTTPException(400, "Invalid filename")
+    if not file_path.exists() or file_path.suffix not in _SAFE_EXTS:
+        raise HTTPException(404, "File not found")
+    media_types = {
+        ".md": "text/markdown", ".tmx": "application/xml",
+        ".xliff": "application/xliff+xml", ".sdlxliff": "application/xliff+xml",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".csv": "text/csv", ".json": "application/json", ".zip": "application/zip",
+    }
+    return FileResponse(str(file_path),
+                        media_type=media_types.get(file_path.suffix, "application/octet-stream"),
+                        filename=filename)
 
 
 @router.get("/api/policy/packages/{package_id}/report")
