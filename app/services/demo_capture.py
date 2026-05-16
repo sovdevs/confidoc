@@ -74,6 +74,39 @@ def get_demo_run_id(job_id: str) -> Optional[str]:
     return _load_sessions().get(job_id)
 
 
+def find_playback(filename: str) -> Optional[Path]:
+    """Return the most recent captured demo run dir that contains artifacts for filename.
+
+    A run qualifies when it has 01_extraction/extracted.md AND
+    02_auto_entities/entities_auto.json, meaning it was fully captured locally.
+    Returns None when no usable run exists (live processing should be used instead).
+    """
+    s = _settings()
+    if not s.demo_runs_dir.exists():
+        return None
+    stem = Path(filename).stem
+    candidates = []
+    for d in s.demo_runs_dir.iterdir():
+        if not d.is_dir():
+            continue
+        meta_path = d / "run_meta.json"
+        if not meta_path.exists():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if stem not in meta.get("label", ""):
+            continue
+        if (d / "01_extraction" / "extracted.md").exists() and \
+           (d / "02_auto_entities" / "entities_auto.json").exists():
+            candidates.append((meta.get("started_at", ""), d))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return candidates[0][1]
+
+
 def list_demo_runs() -> list[dict]:
     """Return all demo runs, newest first."""
     s = _settings()

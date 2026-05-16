@@ -1150,7 +1150,7 @@ async def process_demo_input(
     pdf_model: str = Form(""),
     pdf_api_key: str = Form(""),
 ):
-    """Process a demo PDF (from data/demo/) and start demo capture automatically."""
+    """Load a demo PDF using pre-captured artifacts (no LLM call required)."""
     _require_demo_mode()
     pdf_path = settings.demo_dir / filename
     if not pdf_path.exists():
@@ -1158,24 +1158,35 @@ async def process_demo_input(
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(400, "PDF files only.")
 
-    pdf_bytes = pdf_path.read_bytes()
+    playback_dir = demo_capture.find_playback(filename)
+    if playback_dir is None:
+        raise HTTPException(500, "No pre-captured demo run found for this document.")
+
     job = Job(filename=filename, src_lang=src_lang, tgt_lang=tgt_lang)
     job_store.save(job)
-    audit_log.log(job.id, "job_created", {"filename": filename, "source": "demo"})
+    audit_log.log(job.id, "job_created", {"filename": filename, "source": "demo_playback"})
 
-    # Start demo capture immediately so pipeline hooks can fire
-    run_id = demo_capture.start_demo_run(job.id, label=f"Demo: {filename}")
-    audit_log.log(job.id, "DEMO_CAPTURE_STARTED", {"demo_run_id": run_id})
+    # Copy pre-captured extracted markdown into the normal extracted dir
+    src_md = playback_dir / "01_extraction" / "extracted.md"
+    dest_md = settings.extracted_dir / (Path(filename).stem + f"_{job.id}.md")
+    settings.extracted_dir.mkdir(parents=True, exist_ok=True)
+    import shutil as _shutil
+    _shutil.copy2(src_md, dest_md)
+    rel_md = str(dest_md.relative_to(settings.jobs_dir.parent))
 
-    # Use the server-side demo key if no user key was supplied.
-    # This lets the demo run without the viewer entering any credentials.
-    effective_api_key = pdf_api_key or settings.demo_api_key or None
+    # Load pre-captured entities
+    entities_path = playback_dir / "02_auto_entities" / "entities_auto.json"
+    raw = json.loads(entities_path.read_text(encoding="utf-8"))
+    from app.storage.jobs import Entity
+    entities = [Entity.model_validate(e) for e in raw.get("entities", [])]
 
-    background_tasks.add_task(
-        _run_ingest_and_detect, job, pdf_bytes,
-        pdf_provider or None, pdf_model or None, effective_api_key,
-    )
-    return {"job_id": job.id, "demo_run_id": run_id, "status": job.status}
+    job_store.update_status(job.id, JobStatus.reviewing,
+                            extracted_md=rel_md, entities=entities)
+
+    run_id = demo_capture.start_demo_run(job.id, label=f"Demo playback: {filename}")
+    audit_log.log(job.id, "DEMO_PLAYBACK_LOADED", {"demo_run_id": run_id, "source": str(playback_dir)})
+
+    return {"job_id": job.id, "demo_run_id": run_id, "status": JobStatus.reviewing}
 
 
 @router.post("/api/demo/start")

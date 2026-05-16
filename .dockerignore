@@ -1,6 +1,7 @@
 .venv
 data/
 !data/demo/
+!data/demo_runs/
 __pycache__
 **/__pycache__
 *.pyc
