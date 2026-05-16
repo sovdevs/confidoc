@@ -684,8 +684,11 @@ async def rehydrate_from_export(file: UploadFile = File(...)):
     if not job_id:
         raise HTTPException(500, "Package manifest missing job_id")
 
-    # Load encrypted mapping — Zone 1 resource; never leaves this server
-    token_map = mapping_store.load(job_id)
+    # Load encrypted mapping — Zone 1 resource; never leaves this server.
+    # Prefer the package-specific token map (policy engine tokens) over the
+    # job-level map (Zone 1 assign_tokens tokens) — the prepared package files
+    # use policy tokens, not the internal Zone 1 tokens.
+    token_map = mapping_store.load(f"pkg_{package_id}") or mapping_store.load(job_id)
     if token_map is None:
         raise HTTPException(404,
             "Encrypted token mapping not found for this job. "
@@ -904,6 +907,12 @@ def policy_prepare(body: PolicyPrepareBody):
         pkg = pe_prepare(request, save=True)
     except Exception as e:
         raise HTTPException(500, f"Policy engine error: {e}")
+
+    # Save the policy token map so rehydration can reverse Zone 2 tokens.
+    # Keyed by package_id (not job_id) because each package has its own token
+    # numbering — the same job can produce multiple packages with different tokens.
+    if pkg.policy_token_map:
+        mapping_store.save(f"pkg_{pkg.package_id}", pkg.policy_token_map)
 
     # Generate supplementary export files inside the package directory
     from app.policy_engine.package import _packages_dir
