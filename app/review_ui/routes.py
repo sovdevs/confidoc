@@ -56,12 +56,8 @@ def get_audit(job_id: str):
 
 @router.get("/api/inputs")
 def list_inputs():
-    """Return PDFs already present in data/input/ that have not been processed yet."""
-    existing_filenames = {j.filename for j in job_store.list_all()}
-    pdfs = sorted(
-        p.name for p in settings.input_dir.glob("*.pdf")
-        if p.name not in existing_filenames
-    )
+    """Return all PDFs present in data/input/."""
+    pdfs = sorted(p.name for p in settings.input_dir.glob("*.pdf"))
     return {"files": pdfs}
 
 
@@ -71,6 +67,9 @@ async def process_input(
     filename: str,
     src_lang: str = Form("de-DE"),
     tgt_lang: str = Form("en-GB"),
+    pdf_provider: str = Form(""),
+    pdf_model: str = Form(""),
+    pdf_api_key: str = Form(""),
 ):
     """Start a pipeline job for a PDF already in data/input/."""
     pdf_path = settings.input_dir / filename
@@ -84,7 +83,10 @@ async def process_input(
     job_store.save(job)
     audit_log.log(job.id, "job_created", {"filename": filename, "source": "input_dir"})
 
-    background_tasks.add_task(_run_ingest_and_detect, job, pdf_bytes)
+    background_tasks.add_task(
+        _run_ingest_and_detect, job, pdf_bytes,
+        pdf_provider or None, pdf_model or None, pdf_api_key or None,
+    )
     return {"job_id": job.id, "status": job.status}
 
 
@@ -96,6 +98,9 @@ async def upload(
     file: UploadFile = File(...),
     src_lang: str = Form("de-DE"),
     tgt_lang: str = Form("en-GB"),
+    pdf_provider: str = Form(""),
+    pdf_model: str = Form(""),
+    pdf_api_key: str = Form(""),
 ):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "PDF files only.")
@@ -105,15 +110,27 @@ async def upload(
     job_store.save(job)
     audit_log.log(job.id, "job_created", {"filename": file.filename})
 
-    background_tasks.add_task(_run_ingest_and_detect, job, pdf_bytes)
+    background_tasks.add_task(
+        _run_ingest_and_detect, job, pdf_bytes,
+        pdf_provider or None, pdf_model or None, pdf_api_key or None,
+    )
     return {"job_id": job.id, "status": job.status}
 
 
-async def _run_ingest_and_detect(job: Job, pdf_bytes: bytes) -> None:
+async def _run_ingest_and_detect(
+    job: Job,
+    pdf_bytes: bytes,
+    override_provider: str | None = None,
+    override_model: str | None = None,
+    override_api_key: str | None = None,
+) -> None:
     try:
-        job = await ingest.run(job, pdf_bytes)
-        job = anon.run(job)           # regex pass: fast, deterministic
-        job = await anon_llm.run(job) # LLM pass: few-shot from approved_terms.jsonl
+        job = await ingest.run(job, pdf_bytes,
+                               override_provider=override_provider,
+                               override_model=override_model,
+                               override_api_key=override_api_key)
+        job = anon.run(job)
+        job = await anon_llm.run(job)
     except Exception as e:
         job_store.update_status(job.id, JobStatus.failed, error=str(e))
 
@@ -199,6 +216,19 @@ def dismiss_entity(job_id: str, entity_id: str):
     job = _require_job(job_id)
     job = _update_entity(job, entity_id, approved=False, dismissed=True)
     audit_log.log(job_id, "entity_dismissed", {"entity_id": entity_id})
+    return {"ok": True}
+
+
+@router.delete("/api/jobs/{job_id}/entities/{entity_id}")
+def delete_entity(job_id: str, entity_id: str):
+    """Permanently remove an entity so the text span can be re-annotated."""
+    job = _require_job(job_id)
+    before = len(job.entities)
+    job.entities = [e for e in job.entities if e.id != entity_id]
+    if len(job.entities) == before:
+        raise HTTPException(404, f"Entity {entity_id} not found")
+    job_store.save(job)
+    audit_log.log(job_id, "entity_deleted", {"entity_id": entity_id})
     return {"ok": True}
 
 
@@ -416,12 +446,16 @@ async def _run_ocrcheck_background(job_id: str, text: str) -> None:
 # ── Export ───────────────────────────────────────────────────────────────────
 
 @router.post("/api/jobs/{job_id}/export")
-def trigger_export(job_id: str, reviewer: str = Form("human")):
+def trigger_export(
+    job_id: str,
+    reviewer: str = Form("human"),
+    tgt_lang: str = Form(""),
+):
+    """Zone 1: re-export is always allowed regardless of current status."""
     job = _require_job(job_id)
-    exportable = (JobStatus.reviewing, JobStatus.approved, JobStatus.normalizing,
-                  JobStatus.normalized)
-    if job.status not in exportable:
-        raise HTTPException(400, f"Job is not ready for export (status: {job.status})")
+    if tgt_lang:
+        job_store.update_status(job_id, job.status, tgt_lang=tgt_lang)
+        job = job_store.load(job_id)
     try:
         job = export.run(job, reviewer=reviewer)
     except Exception as e:
@@ -438,6 +472,38 @@ def get_extracted_md(job_id: str):
     if not path.exists():
         raise HTTPException(404, "File not found on disk")
     return HTMLResponse(path.read_text(encoding="utf-8"), media_type="text/plain")
+
+
+@router.get("/api/jobs/{job_id}/pdf")
+def get_original_pdf(job_id: str):
+    """Serve the original PDF for inline viewing."""
+    job = _require_job(job_id)
+    pdf_path = settings.input_dir / job.filename
+    if not pdf_path.exists():
+        raise HTTPException(404, "Original PDF not found")
+    return FileResponse(str(pdf_path), media_type="application/pdf",
+                        headers={"Content-Disposition": "inline"})
+
+
+@router.get("/api/jobs/{job_id}/preview")
+def preview_info(job_id: str):
+    """Return the number of available preview pages for this job."""
+    _require_job(job_id)
+    preview_dir = settings.zone1_previews_dir / job_id
+    if not preview_dir.exists():
+        return {"pages": 0}
+    pages = sorted(preview_dir.glob("page_*.png"))
+    return {"pages": len(pages)}
+
+
+@router.get("/api/jobs/{job_id}/preview/{page}")
+def preview_page(job_id: str, page: int):
+    """Serve a single rendered page PNG (1-indexed)."""
+    _require_job(job_id)
+    png = settings.zone1_previews_dir / job_id / f"page_{page:03d}.png"
+    if not png.exists():
+        raise HTTPException(404, f"Preview page {page} not found")
+    return FileResponse(str(png), media_type="image/png")
 
 
 # ── Rehydration ──────────────────────────────────────────────────────────────

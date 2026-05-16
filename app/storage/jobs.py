@@ -53,6 +53,10 @@ class Job(BaseModel):
     exported_csv: Optional[str] = None
     mapping_path: Optional[str] = None   # data/mappings/   — encrypted token map
 
+    # OCR extraction model used for this job (may differ from config defaults)
+    pdf_provider: Optional[str] = None
+    pdf_model: Optional[str] = None
+
     src_lang: str = "de-DE"
     tgt_lang: str = "en-GB"
 
@@ -76,7 +80,10 @@ def load(job_id: str) -> Optional[Job]:
     p = _path(job_id)
     if not p.exists():
         return None
-    return Job.model_validate_json(p.read_text(encoding="utf-8"))
+    job = Job.model_validate_json(p.read_text(encoding="utf-8"))
+    # Ensure entities are Entity instances — Python 3.14 / Pydantic Rust serializer compat
+    job.entities = [Entity.model_validate(e) if isinstance(e, dict) else e for e in job.entities]
+    return job
 
 
 def list_all() -> list[Job]:

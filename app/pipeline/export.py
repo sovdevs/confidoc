@@ -1,11 +1,12 @@
 """Export stage: tokenize, redact, write TMX/CSV, save encrypted mapping."""
 
+import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from pdf_to_markdown.exporter import md_to_segments, write_csv, write_tmx
+from pdf_to_markdown.exporter import md_to_segments, write_tmx
 
 from app.config import settings
 from app.storage import audit_log, jobs as job_store
@@ -97,8 +98,16 @@ def run(job: Job, reviewer: str = "human") -> Job:
 
     tmx_path = settings.exported_dir / f"{stem}.tmx"
     csv_path = settings.exported_dir / f"{stem}.csv"
+
+    # TMX: bilingual, requires explicit target language set by Zone 1 user
     write_tmx(segments, job.src_lang, job.tgt_lang, tmx_path)
-    write_csv(segments, job.src_lang, job.tgt_lang, csv_path)
+
+    # CSV: source-only (id + source segments) — no target column
+    with csv_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+        writer.writerow(["id", job.src_lang])
+        for i, seg in enumerate(segments, 1):
+            writer.writerow([i, seg])
 
     rel_tmx = str(tmx_path.relative_to(settings.jobs_dir.parent))
     rel_csv = str(csv_path.relative_to(settings.jobs_dir.parent))

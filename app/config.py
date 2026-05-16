@@ -48,7 +48,8 @@ class Settings:
     exported_dir: Path = DATA / "exported"
     final_dir: Path = DATA / "final"
     jobs_dir: Path = DATA / "jobs"
-    mappings_dir: Path = DATA / "mappings"   # encrypted per-job token maps
+    mappings_dir: Path = DATA / "mappings"       # encrypted per-job token maps
+    zone1_previews_dir: Path = DATA / "zone1" / "previews"  # per-job page PNGs
     audit_log: Path = DATA / "audit.jsonl"
     approved_terms: Path = DATA / "approved_terms.jsonl"
 
@@ -57,6 +58,7 @@ class Settings:
             self.input_dir, self.extracted_dir, self.anonymized_dir,
             self.reviewed_dir, self.normalized_dir, self.exported_dir,
             self.final_dir, self.jobs_dir, self.mappings_dir,
+            self.zone1_previews_dir,
         ):
             d.mkdir(parents=True, exist_ok=True)
 

@@ -18,7 +18,40 @@
   --danger:    #e05a5a;
   --success:   #4caf7d;
   --warning:   #e5a84e;
+  --zone1:     #c0392b;
+  --zone1-bg:  #2a0e0e;
+  --zone1-border: #6b1a1a;
   --sidebar-w: 280px;
+}
+
+/* ── Zone 1 indicator ────────────────────────────────────── */
+#zone1-banner {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 24px;
+  background: var(--zone1-bg);
+  border-bottom: 1px solid var(--zone1-border);
+  font-size: 11px;
+  color: #e07070;
+  font-weight: 500;
+  letter-spacing: .3px;
+  flex-shrink: 0;
+}
+#zone1-banner .z1-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--zone1); flex-shrink: 0;
+  box-shadow: 0 0 6px var(--zone1);
+  animation: z1-pulse 2s ease-in-out infinite;
+}
+@keyframes z1-pulse {
+  0%, 100% { opacity: 1; } 50% { opacity: .4; }
+}
+#detail-pane.zone1 .detail-header {
+  border-bottom-color: var(--zone1-border);
+}
+#detail-pane.zone1 .entity-panel h3 {
+  border-bottom-color: var(--zone1-border);
 }
 
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -78,6 +111,7 @@ aside { width: var(--sidebar-w); flex-shrink: 0; background: var(--surface);
 .btn-primary:hover:not(:disabled) { background: var(--accent-hl); }
 .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
 .btn-ghost:hover:not(:disabled) { background: #222536; }
+.btn-ghost.active { background: #1e2340; border-color: var(--accent); color: var(--accent); }
 .btn-success { background: #1a4030; color: var(--success); border: 1px solid #2d6048; }
 .btn-success:hover:not(:disabled) { background: #22503c; }
 .btn-danger  { background: #401818; color: var(--danger); border: 1px solid #6a2828; }
@@ -140,14 +174,16 @@ main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 #entity-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .entity-card { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px;
-               overflow: hidden; transition: border-color .15s; }
-.entity-card.approved { border-color: #2d6048; }
-.entity-card.dismissed { border-color: #444; opacity: .55; }
+               overflow: hidden; transition: border-color .2s, background .2s, opacity .2s; }
+.entity-card.approved  { border-color: #2d6048; background: #0d2018; }
+.entity-card.dismissed { border-color: #5a2828; background: #1a0e0e; opacity: .65; }
 .entity-card.manual { border-style: dashed; }
 .entity-card.manual .entity-head::after { content: "manual"; font-size: 9px;
   color: var(--warning); margin-left: auto; letter-spacing: .5px; }
 .entity-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
                background: #15182a; }
+.entity-card.approved  .entity-head { background: #0f2a1d; }
+.entity-card.dismissed .entity-head { background: #1f0f0f; }
 .entity-label { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
                 letter-spacing: .4px; text-transform: uppercase; }
 .lbl-patient_name { background:#3a0f1a; color:#e06080; }
@@ -179,7 +215,7 @@ main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .entity-edit-row input:focus { outline: none; border-color: var(--accent); }
 
 /* ── Text preview ────────────────────────────────────────── */
-.text-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.text-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 .text-panel h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
                  color: var(--muted); padding: 14px 16px; border-bottom: 1px solid var(--border); }
 #text-preview { flex: 1; overflow-y: auto; padding: 20px 24px;
@@ -187,6 +223,22 @@ main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
                 font-family: "JetBrains Mono", "Fira Code", monospace; }
 #text-preview::-webkit-scrollbar { width: 4px; }
 #text-preview::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── PDF side panel ──────────────────────────────────────── */
+#pdf-panel {
+  display: none; flex-direction: column; flex: 1; min-width: 0;
+  border-left: 1px solid var(--zone1-border);
+  background: var(--bg);
+}
+#pdf-panel.open { display: flex; }
+#pdf-panel-bar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+  background: var(--zone1-bg); border-bottom: 1px solid var(--zone1-border);
+  flex-shrink: 0; font-size: 11px; color: #e07070;
+}
+#pdf-panel iframe {
+  flex: 1; border: none; background: #222;
+}
 mark.highlight { background: #2a2a10; color: #e5d050; border-radius: 3px;
                  padding: 0 2px; cursor: pointer; }
 mark.highlight:hover { background: #3a3a18; }
@@ -256,6 +308,17 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
            display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 .token-warning { font-size: 12px; color: var(--danger); display: none; }
 
+/* ── Upload wizard ───────────────────────────────────────── */
+#upload-pane { justify-content: flex-start; padding: 32px 40px; align-items: flex-start; }
+.wizard-step { padding: 20px 0; border-bottom: 1px solid var(--border); width: 100%; }
+.wizard-step-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+                     color: var(--muted); margin-bottom: 14px; }
+.drop-zone { border-radius: 10px; padding: 22px 16px; text-align: center; cursor: pointer;
+             border: 2px dashed var(--border); transition: border-color .2s, background .2s; }
+.drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: #12162a; }
+.drop-zone.has-file { border-color: var(--success); background: #0f2a1d; }
+#file-input { display: none; }
+
 /* ── View tabs ───────────────────────────────────────────── */
 .view-tabs { display: flex; gap: 4px; }
 .view-tab { font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
@@ -283,6 +346,43 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
          font-size: 13px; display: none; z-index: 99; }
 .toast.error { border-color: var(--danger); color: var(--danger); }
 .toast.success { border-color: var(--success); color: var(--success); }
+
+/* ── PDF Preview Modal ───────────────────────────────────── */
+#pdf-modal {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,.88); flex-direction: column; align-items: center;
+}
+#pdf-modal.open { display: flex; }
+#pdf-modal-bar {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; background: var(--surface);
+  border-bottom: 1px solid var(--zone1-border); flex-shrink: 0;
+}
+#pdf-modal-bar .z1-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--zone1);
+  box-shadow: 0 0 6px var(--zone1); flex-shrink: 0;
+}
+#pdf-modal-title { font-size: 13px; font-weight: 500; flex: 1;
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pdf-modal-pages { font-size: 12px; color: var(--muted); white-space: nowrap; }
+#pdf-modal-zoom  { font-size: 12px; color: var(--muted); }
+#pdf-modal-scroll {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+  align-items: center; gap: 12px; padding: 16px;
+  width: 100%;
+}
+#pdf-modal-scroll img {
+  max-width: calc(var(--pdf-zoom, 1) * 100%);
+  width: calc(var(--pdf-zoom, 1) * 100%);
+  border-radius: 4px; box-shadow: 0 4px 24px rgba(0,0,0,.6);
+  display: block;
+}
+#pdf-modal-nav {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+  background: var(--surface); border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#pdf-modal-nav button { min-width: 36px; }
 
 /* ── Processing overlay ──────────────────────────────────── */
 .proc-badge { display: inline-flex; align-items: center; gap: 6px;
@@ -387,89 +487,119 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
   </aside>
 
   <main>
-    <!-- Upload pane -->
+    <!-- Upload pane — three-step layout -->
     <div id="upload-pane">
-      <div class="drop-zone" id="drop-zone">
-        <input type="file" id="file-input" accept=".pdf">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="17 8 12 3 7 8"/>
-          <line x1="12" y1="3" x2="12" y2="15"/>
-        </svg>
-        <p><strong>Drop a PDF here</strong></p>
-        <p style="margin-top:6px;font-size:12px;">or click to browse</p>
-      </div>
+      <div style="width:100%;max-width:500px;display:flex;flex-direction:column;gap:0">
 
-      <!-- Input folder picker -->
-      <div id="input-picker" style="display:none;width:100%;max-width:440px;flex-direction:column;gap:8px;">
-        <div style="font-size:12px;color:var(--muted);padding:2px 0">PDFs in <code style="background:var(--border);padding:1px 5px;border-radius:4px;font-size:11px">data/input/</code></div>
-        <select id="input-select" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:13px;width:100%">
-          <option value="">— select a file —</option>
-        </select>
-        <div class="form-row" id="input-lang-row" style="display:none">
-          <div class="form-group">
-            <label>Source language</label>
-            <select id="input-src-lang">
-              <option value="de-DE">German (de-DE)</option>
-              <option value="de-AT">German — Austria</option>
-              <option value="de-CH">German — Switzerland</option>
-              <option value="en-US">English (US)</option>
-              <option value="en-GB">English (UK)</option>
-              <option value="fr-FR">French</option>
-            </select>
+        <!-- ── Step 1: Choose Source ──────────────────────────── -->
+        <div class="wizard-step">
+          <div class="wizard-step-label">1 — Choose source</div>
+
+          <!-- Source tabs -->
+          <div style="display:flex;gap:6px;margin-bottom:14px">
+            <button class="view-tab active" id="src-tab-local">Local</button>
+            <button class="view-tab" id="src-tab-server" disabled
+                    title="Coming soon" style="opacity:.4;cursor:not-allowed">Server</button>
           </div>
-          <div class="form-group">
-            <label>Target language</label>
-            <select id="input-tgt-lang">
-              <option value="en-GB">English (UK)</option>
-              <option value="en-US">English (US)</option>
-              <option value="de-DE">German</option>
-              <option value="fr-FR">French</option>
-            </select>
+
+          <!-- Two-column source row: drop zone + folder picker -->
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0;align-items:start">
+
+            <!-- Drag-and-drop / browse -->
+            <div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Upload file</div>
+              <div class="drop-zone" id="drop-zone" style="padding:22px 16px">
+                <input type="file" id="file-input" accept=".pdf">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <p style="font-size:12px;margin-top:6px"><strong>Drop PDF</strong> or click</p>
+              </div>
+            </div>
+
+            <!-- OR divider -->
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 12px;margin-top:24px">
+              <div style="width:1px;height:30px;background:var(--border)"></div>
+              <span style="font-size:10px;color:var(--muted);padding:4px 0">or</span>
+              <div style="width:1px;height:30px;background:var(--border)"></div>
+            </div>
+
+            <!-- From data/input/ folder -->
+            <div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px">
+                From <code style="background:var(--border);padding:1px 4px;border-radius:3px;font-size:10px">data/input/</code>
+              </div>
+              <select id="input-select"
+                      style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12px;width:100%">
+                <option value="">— select a file —</option>
+              </select>
+              <div id="folder-empty-hint" style="font-size:11px;color:var(--muted);margin-top:5px;display:none">
+                No PDFs found in data/input/
+              </div>
+            </div>
+          </div>
+
+          <!-- Selected file indicator (shown when any source is chosen) -->
+          <div id="selected-file-row" style="display:none;margin-top:12px">
+            <div class="selected-file">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <span class="fname" id="selected-name"></span>
+              <button id="clear-file" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1">✕</button>
+            </div>
           </div>
         </div>
-        <button class="btn btn-primary" id="process-input-btn" style="display:none">Process Selected PDF</button>
-      </div>
 
-      <!-- Divider -->
-      <div id="upload-divider" style="display:flex;align-items:center;gap:12px;width:100%;max-width:440px;">
-        <div style="flex:1;height:1px;background:var(--border)"></div>
-        <span style="font-size:11px;color:var(--muted)">OR UPLOAD FROM BROWSER</span>
-        <div style="flex:1;height:1px;background:var(--border)"></div>
-      </div>
-
-      <div class="upload-form" id="upload-form" style="display:none">
-        <div class="selected-file">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <span class="fname" id="selected-name"></span>
-          <button id="clear-file">✕</button>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Source language</label>
-            <select id="src-lang">
-              <option value="de-DE">German (de-DE)</option>
-              <option value="de-AT">German — Austria</option>
-              <option value="de-CH">German — Switzerland</option>
-              <option value="en-US">English (US)</option>
-              <option value="en-GB">English (UK)</option>
-              <option value="fr-FR">French</option>
-            </select>
+        <!-- ── Step 2: Choose LLM ─────────────────────────────── -->
+        <div class="wizard-step">
+          <div class="wizard-step-label">2 — OCR model</div>
+          <div class="form-row" style="gap:8px;margin-bottom:8px">
+            <div class="form-group" style="flex:0 0 140px">
+              <label>Provider</label>
+              <select id="ocr-provider" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;width:100%">
+                <option value="">server default</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="openai">OpenAI</option>
+                <option value="google">Google (direct)</option>
+                <option value="localhost">Localhost</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:6px">
+                Model
+                <span id="model-load-status" style="font-size:10px;color:var(--muted)"></span>
+              </label>
+              <input list="model-suggestions" id="ocr-model"
+                     autocomplete="off"
+                     style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;width:100%;outline:none"
+                     placeholder="server default">
+              <datalist id="model-suggestions"></datalist>
+            </div>
           </div>
           <div class="form-group">
-            <label>Target language</label>
-            <select id="tgt-lang">
-              <option value="en-GB">English (UK)</option>
-              <option value="en-US">English (US)</option>
-              <option value="de-DE">German</option>
-              <option value="fr-FR">French</option>
-            </select>
+            <label>API key <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <input type="text" id="ocr-api-key" placeholder="leave blank — uses server configured key"
+                   autocomplete="off" spellcheck="false"
+                   style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;width:100%;outline:none;font-family:monospace">
+          </div>
+          <div id="ocr-model-current" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+        </div>
+
+        <!-- ── Step 3: Run ────────────────────────────────────── -->
+        <div class="wizard-step" style="border-bottom:none;padding-bottom:0">
+          <div class="wizard-step-label">3 — Extract</div>
+          <button class="btn btn-primary" id="run-btn" disabled style="width:100%;justify-content:center;padding:11px;font-size:14px">
+            Run OCR Extraction
+          </button>
+          <div id="run-hint" style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">
+            Select a source PDF above to continue
           </div>
         </div>
-        <button class="btn btn-primary" id="upload-btn">Upload &amp; Process</button>
+
       </div>
     </div>
 
@@ -520,6 +650,10 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
     <!-- Detail pane -->
     <div id="detail-pane">
+      <div id="zone1-banner">
+        <div class="z1-dot"></div>
+        ZONE 1 — Raw PHI &nbsp;·&nbsp; This document contains unredacted personal health information. Handle with care.
+      </div>
       <div class="detail-header">
         <div>
           <div style="display:flex;align-items:center;gap:10px;">
@@ -530,6 +664,13 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
           <div class="view-tabs" id="view-tabs"></div>
+          <button class="btn btn-ghost btn-sm" id="view-pdf-btn" style="display:none" title="Toggle PDF side panel">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Compare PDF
+          </button>
           <div class="actions" id="detail-actions"></div>
         </div>
       </div>
@@ -546,6 +687,15 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
         <div class="text-panel">
           <h3>Extracted Text <span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:6px">— select text to mark missing entities</span></h3>
           <div id="text-preview"></div>
+        </div>
+
+        <div id="pdf-panel">
+          <div id="pdf-panel-bar">
+            <div class="z1-dot"></div>
+            <span>Original PDF — Zone 1</span>
+            <button onclick="closePdfPanel()" style="margin-left:auto;background:none;border:none;color:#e07070;cursor:pointer;font-size:15px;line-height:1">✕</button>
+          </div>
+          <iframe id="pdf-panel-iframe" src="" title="Original PDF"></iframe>
         </div>
       </div>
 
@@ -569,6 +719,29 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           <button class="btn btn-ghost btn-sm" id="btn-save-draft">Save draft</button>
           <span id="ocr-save-status" style="font-size:12px;color:var(--muted)"></span>
           <button class="btn btn-primary btn-sm" id="btn-approve-normalized" style="margin-left:auto">✓ Approve normalized</button>
+        </div>
+      </div>
+
+      <!-- Mapping pane (Zone 1 — token ↔ original value table) -->
+      <div id="mapping-pane" style="flex:1;overflow:hidden;flex-direction:column">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--zone1-border);background:var(--zone1-bg);flex-shrink:0;display:flex;align-items:center;gap:8px">
+          <div class="z1-dot"></div>
+          <span style="font-size:12px;color:#e07070;font-weight:500">Zone 1 — Token Mapping (confidential)</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:auto">Each token → original value. Created on export.</span>
+        </div>
+        <div id="mapping-table-wrap" style="flex:1;overflow-y:auto;padding:16px 20px">
+          <table style="width:100%;border-collapse:collapse;font-size:12px" id="mapping-table">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:left;padding:6px 10px;color:var(--muted);font-weight:600;width:200px">Token</th>
+                <th style="text-align:left;padding:6px 10px;color:var(--muted);font-weight:600">Original value</th>
+              </tr>
+            </thead>
+            <tbody id="mapping-rows"></tbody>
+          </table>
+          <div id="mapping-empty" style="display:none;padding:20px;color:var(--muted);font-size:13px">
+            No mapping found. Mappings are created when a job is exported.
+          </div>
         </div>
       </div>
 
@@ -697,10 +870,9 @@ const detailPane   = document.getElementById("detail-pane");
 const importPane   = document.getElementById("import-pane");
 const dropZone     = document.getElementById("drop-zone");
 const fileInput    = document.getElementById("file-input");
-const uploadForm   = document.getElementById("upload-form");
 const selectedName = document.getElementById("selected-name");
 const clearFileBtn = document.getElementById("clear-file");
-const uploadBtn    = document.getElementById("upload-btn");
+const runBtn       = document.getElementById("run-btn");
 const newBtn       = document.getElementById("new-btn");
 const importBtn    = document.getElementById("import-btn");
 const toast        = document.getElementById("toast");
@@ -788,6 +960,7 @@ function escHtml(s) {
 // ── Select job ────────────────────────────────────────────
 async function selectJob(id) {
   clearPoll();
+  closePdfPanel();
   try {
     currentJob = await api(`/api/jobs/${id}`);
   } catch(e) { showToast("Failed to load job", "error"); return; }
@@ -845,6 +1018,44 @@ function showDetailPane() {
   detailPane.style.display = "flex";
 }
 
+// ── Zone 1 / PDF button ───────────────────────────────────
+const _zone1Statuses = new Set(["extracting", "reviewing"]);
+
+function updateZone1(j) {
+  const banner  = document.getElementById("zone1-banner");
+  const pdfBtn  = document.getElementById("view-pdf-btn");
+  const isZone1 = _zone1Statuses.has(j.status);
+  banner.style.display  = isZone1 ? "flex" : "none";
+  detailPane.classList.toggle("zone1", isZone1);
+  if (pdfBtn) pdfBtn.style.display = j.filename?.toLowerCase().endsWith(".pdf") ? "inline-flex" : "none";
+}
+
+// ── PDF side panel ────────────────────────────────────────
+const pdfPanel       = document.getElementById("pdf-panel");
+const pdfPanelIframe = document.getElementById("pdf-panel-iframe");
+
+function openPdfPanel(jobId) {
+  pdfPanelIframe.src = `/api/jobs/${jobId}/pdf`;
+  pdfPanel.classList.add("open");
+  document.getElementById("view-pdf-btn").classList.add("active");
+}
+
+function closePdfPanel() {
+  pdfPanel.classList.remove("open");
+  pdfPanelIframe.src = "";
+  const btn = document.getElementById("view-pdf-btn");
+  if (btn) btn.classList.remove("active");
+}
+
+document.getElementById("view-pdf-btn")?.addEventListener("click", () => {
+  if (!currentJob) return;
+  if (pdfPanel.classList.contains("open")) {
+    closePdfPanel();
+  } else {
+    openPdfPanel(currentJob.id);
+  }
+});
+
 // ── Detail render ─────────────────────────────────────────
 function renderDetail() {
   const j = currentJob;
@@ -857,6 +1068,7 @@ function renderDetail() {
     `${j.src_lang} → ${j.tgt_lang}  ·  Created ${fmtTime(j.created_at)}` +
     (j.error ? `  ·  Error: ${j.error}` : "");
 
+  updateZone1(j);
   renderViewTabs(j);
   renderActions(j);
   renderEntities(j);
@@ -870,10 +1082,11 @@ function renderViewTabs(j) {
   const tabs = document.getElementById("view-tabs");
   const canNormalize = ["approved","normalizing","normalized","done"].includes(j.status);
   const canPolicy    = ["reviewing","approved","normalizing","normalized","done"].includes(j.status);
-  if (!canNormalize && !canPolicy) { tabs.innerHTML = ""; return; }
+  const canMapping   = !!j.mapping_path;
 
   let html = `<button class="view-tab ${viewMode==="entities"?"active":""}" data-view="entities">Entities</button>`;
   if (canNormalize) html += `<button class="view-tab ${viewMode==="ocr"?"active":""}" data-view="ocr">OCR Check</button>`;
+  if (canMapping)   html += `<button class="view-tab ${viewMode==="mapping"?"active":""}" data-view="mapping">🔑 Mapping</button>`;
   if (canPolicy)    html += `<button class="view-tab ${viewMode==="policy"?"active":""}" data-view="policy">🔒 Policy</button>`;
   tabs.innerHTML = html;
   tabs.querySelectorAll(".view-tab").forEach(btn =>
@@ -886,9 +1099,11 @@ function setViewMode(mode, j) {
   const ocrPane    = document.getElementById("ocr-pane");
   const policyPane = document.getElementById("policy-pane");
 
-  entityBody.style.display = "none";
-  ocrPane.style.display    = "none";
-  policyPane.style.display = "none";
+  const mappingPane = document.getElementById("mapping-pane");
+  entityBody.style.display  = "none";
+  ocrPane.style.display     = "none";
+  policyPane.style.display  = "none";
+  mappingPane.style.display = "none";
 
   if (mode === "ocr") {
     ocrPane.style.display = "flex";
@@ -898,6 +1113,10 @@ function setViewMode(mode, j) {
     policyPane.style.display = "flex";
     policyPane.style.flexDirection = "column";
     initPolicyPane(j);
+  } else if (mode === "mapping") {
+    mappingPane.style.display = "flex";
+    mappingPane.style.flexDirection = "column";
+    loadMappingPane(j);
   } else {
     entityBody.style.display = "flex";
   }
@@ -929,7 +1148,15 @@ function renderActions(j) {
   } else if (j.status === "exporting") {
     html = `<span class="proc-badge"><span class="spinner"></span>Exporting…</span>`;
   } else if (j.status === "done") {
-    html = `<span style="font-size:12px;color:var(--success)">✓ Complete</span>`;
+    const approved = j.entities.filter(e=>e.approved).length;
+    const total = j.entities.length;
+    html = `
+      <span style="font-size:12px;color:var(--success)">✓ Complete</span>
+      <span style="font-size:12px;color:var(--muted)">${approved}/${total} approved</span>
+      <button class="btn btn-ghost btn-sm" id="btn-approve-all">Approve All</button>
+      <button class="btn btn-ghost btn-sm" id="btn-redetect" title="Re-run detection">↺ Re-detect</button>
+      <button class="btn btn-primary btn-sm" id="btn-export">↺ Re-export</button>
+    `;
   } else if (j.status === "failed") {
     html = `<span style="font-size:12px;color:var(--danger)">✗ Failed</span>`;
   }
@@ -957,13 +1184,14 @@ function renderEntities(j) {
 
   const manualCount = j.entities.filter(e => e.manual).length;
   count.textContent = j.entities.length + (manualCount ? ` (${manualCount} manual)` : "");
-  const reviewing = j.status === "reviewing" || j.status === "approved";
+  // Zone 1: entity actions always available (re-edit even after done)
+  const reviewing = ["reviewing", "approved", "normalized", "done"].includes(j.status);
 
   el.innerHTML = j.entities.map((e,i) => {
     const state = e.approved ? "approved" : (e.dismissed ? "dismissed" : "pending");
     const manualCls = e.manual ? " manual" : "";
     return `
-    <div class="entity-card ${state}${manualCls}" data-idx="${i}" data-id="${e.id}">
+    <div class="entity-card ${state}${manualCls}" data-idx="${i}" data-id="${e.id}" data-entity-id="${e.id}">
       <div class="entity-head">
         <span class="${labelClass(e.label)}">${e.label}</span>
         <div class="entity-status-dot ${state}"></div>
@@ -977,6 +1205,7 @@ function renderEntities(j) {
         <button class="btn btn-success btn-sm" data-action="approve" data-id="${e.id}">✓ Approve</button>
         <button class="btn btn-danger  btn-sm" data-action="dismiss" data-id="${e.id}">✗ Dismiss</button>
         <button class="btn btn-ghost   btn-sm" data-action="edit"    data-id="${e.id}" style="margin-left:auto">Edit</button>
+        <button class="btn btn-ghost   btn-sm" data-action="delete"  data-id="${e.id}" title="Remove entirely — allows re-annotation of this span" style="color:var(--danger);padding:4px 7px">🗑</button>
       </div>
       <div class="entity-edit-row" id="edit-${e.id}">
         <input type="text" placeholder="${escHtml(e.replacement)}" value="${escHtml(e.replacement)}">
@@ -993,6 +1222,19 @@ function renderEntities(j) {
   });
 }
 
+function _scrollToNextPending(currentEntityId) {
+  const list = document.getElementById("entity-list");
+  const cards = [...list.querySelectorAll(".entity-card[data-entity-id]")];
+  const idx = cards.findIndex(c => c.dataset.entityId === currentEntityId);
+  // Find next card that is still pending (not yet approved/dismissed)
+  const next = cards.slice(idx + 1).find(c =>
+    !c.classList.contains("approved") && !c.classList.contains("dismissed")
+  ) || cards.slice(0, idx).find(c =>
+    !c.classList.contains("approved") && !c.classList.contains("dismissed")
+  );
+  if (next) next.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 async function handleEntityAction(evt) {
   const btn = evt.currentTarget;
   const action = btn.dataset.action;
@@ -1000,10 +1242,24 @@ async function handleEntityAction(evt) {
   const jobId = currentJob.id;
 
   if (action === "approve") {
+    // Optimistic UI: green immediately, then sync
+    const card = btn.closest(".entity-card");
+    if (card) { card.classList.remove("dismissed"); card.classList.add("approved"); }
+    _scrollToNextPending(entityId);
     await api(`/api/jobs/${jobId}/entities/${entityId}/approve`, {method:"POST"});
     await refreshCurrentJob();
   } else if (action === "dismiss") {
+    // Optimistic UI: red/muted immediately, then sync
+    const card = btn.closest(".entity-card");
+    if (card) { card.classList.remove("approved"); card.classList.add("dismissed"); }
+    _scrollToNextPending(entityId);
     await api(`/api/jobs/${jobId}/entities/${entityId}/dismiss`, {method:"POST"});
+    await refreshCurrentJob();
+  } else if (action === "delete") {
+    const card = btn.closest(".entity-card");
+    if (card) card.style.opacity = "0.3";
+    _scrollToNextPending(entityId);
+    await api(`/api/jobs/${jobId}/entities/${entityId}`, {method:"DELETE"});
     await refreshCurrentJob();
   } else if (action === "edit") {
     const row = document.getElementById(`edit-${entityId}`);
@@ -1104,15 +1360,28 @@ async function approveAll() {
 }
 
 async function triggerExport() {
+  // Prompt for TMX target language before exporting
+  const currentTgt = currentJob.tgt_lang || "";
+  const tgtLang = window.prompt(
+    "Target language for TMX export\n(BCP 47 format, e.g. en-US, en-GB, fr-FR, es-ES)\nLeave blank to keep current: " + (currentTgt || "not set"),
+    currentTgt
+  );
+  if (tgtLang === null) return; // cancelled
+  if (!tgtLang.trim()) {
+    showToast("Target language required for TMX export", "error");
+    return;
+  }
+
   const fd = new FormData();
   fd.append("reviewer", "human");
+  fd.append("tgt_lang", tgtLang.trim());
   try {
     currentJob = await api(`/api/jobs/${currentJob.id}/export`, {method:"POST", body:fd});
     renderDetail();
     renderJobList();
     const approved = currentJob.entities.filter(e=>e.approved).length;
     const manual   = currentJob.entities.filter(e=>e.approved && e.manual).length;
-    showToast(`Export complete — ${approved} terms logged to knowledge base${manual ? ` (${manual} manual)` : ""}`);
+    showToast(`Export complete (${tgtLang.trim()}) — ${approved} terms logged${manual ? ` (${manual} manual)` : ""}`);
   } catch(e) { showToast(e.message, "error"); }
 }
 
@@ -1125,14 +1394,21 @@ const pickerConfirm = document.getElementById("picker-confirm");
 const pickerCancel  = document.getElementById("picker-cancel");
 
 const LABELS = [
-  {label:"PATIENT_NAME", repl:"[PATIENT_NAME]"},
-  {label:"PHYSICIAN_NAME", repl:"[PHYSICIAN_NAME]"},
-  {label:"DATE",         repl:"[DATE]"},
-  {label:"ADDRESS",      repl:"[ADDRESS]"},
-  {label:"LOCATION",     repl:"[LOCATION]"},
-  {label:"CASE_ID",      repl:"[CASE_ID]"},
-  {label:"ID_NUMBER",    repl:"[ID_NUMBER]"},
-  {label:"PHONE",        repl:"[PHONE]"},
+  {label:"PATIENT_NAME",    repl:"[PATIENT_NAME]"},
+  {label:"PHYSICIAN_NAME",  repl:"[PHYSICIAN_NAME]"},
+  {label:"DATE",            repl:"[DATE]"},
+  {label:"ADDRESS",         repl:"[ADDRESS]"},
+  {label:"LOCATION",        repl:"[LOCATION]"},
+  {label:"CASE_ID",         repl:"[CASE_ID]"},
+  {label:"ID_NUMBER",       repl:"[ID_NUMBER]"},
+  {label:"PHONE",           repl:"[PHONE]"},
+  {label:"EMAIL",           repl:"[EMAIL]"},
+  {label:"ORGANIZATION",    repl:"[ORGANIZATION]"},
+  {label:"INSURANCE_ID",    repl:"[INSURANCE_ID]"},
+  {label:"BANK_INFORMATION",repl:"[BANK_INFORMATION]"},
+  {label:"DIAGNOSIS",       repl:"[DIAGNOSIS]"},
+  {label:"MEDICATION",      repl:"[MEDICATION]"},
+  {label:"OTHER_PII",       repl:"[OTHER_PII]"},
 ];
 
 function getTextOffset(container, targetNode, targetOffset) {
@@ -1182,12 +1458,20 @@ document.getElementById("text-preview").addEventListener("mouseup", (evt) => {
   // Pre-select first
   pickerLabels.querySelector(".label-btn")?.click();
 
-  // Position near mouse
-  const x = Math.min(evt.clientX + 10, window.innerWidth - 270);
-  const y = Math.min(evt.clientY + 10, window.innerHeight - 260);
+  // Position near mouse — render off-screen first to measure real height
+  picker.style.display = "block";
+  picker.style.left = "-9999px";
+  picker.style.top  = "-9999px";
+  const pickerH = picker.offsetHeight;
+  const pickerW = picker.offsetWidth;
+  const gap = 8;
+  const x = Math.min(evt.clientX + gap, window.innerWidth  - pickerW - gap);
+  const spaceBelow = window.innerHeight - evt.clientY - gap;
+  const y = spaceBelow >= pickerH
+    ? evt.clientY + gap                        // fits below cursor
+    : Math.max(gap, evt.clientY - pickerH - gap); // flip above cursor
   picker.style.left = x + "px";
   picker.style.top  = y + "px";
-  picker.style.display = "block";
 });
 
 function hidePicker() {
@@ -1219,7 +1503,35 @@ pickerConfirm.addEventListener("click", async () => {
   }
 });
 
-// ── Upload ────────────────────────────────────────────────
+// ── Upload wizard ─────────────────────────────────────────
+const selectedFileRow  = document.getElementById("selected-file-row");
+const inputSelect      = document.getElementById("input-select");
+const runHint          = document.getElementById("run-hint");
+let selectedFolderFile = "";
+
+function _setSource(filename, file) {
+  selectedFile       = file || null;
+  selectedFolderFile = file ? "" : filename;
+  selectedName.textContent = filename;
+  selectedFileRow.style.display = "block";
+  dropZone.classList.toggle("has-file", !!file);
+  runBtn.disabled = false;
+  if (runHint) runHint.style.display = "none";
+}
+
+function _clearSource() {
+  selectedFile       = null;
+  selectedFolderFile = "";
+  selectedName.textContent = "";
+  selectedFileRow.style.display = "none";
+  dropZone.classList.remove("has-file");
+  runBtn.disabled = true;
+  if (runHint) runHint.style.display = "block";
+  fileInput.value = "";
+  inputSelect.value = "";
+}
+
+// Drop zone — click / drag-and-drop
 dropZone.addEventListener("click", () => fileInput.click());
 dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
 dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
@@ -1227,48 +1539,142 @@ dropZone.addEventListener("drop", e => {
   e.preventDefault();
   dropZone.classList.remove("drag-over");
   const f = e.dataTransfer.files[0];
-  if (f) setFile(f);
+  if (f) _pickFile(f);
 });
-fileInput.addEventListener("change", () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
-clearFileBtn.addEventListener("click", () => { selectedFile = null; uploadForm.style.display="none"; dropZone.style.display="flex"; });
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) _pickFile(fileInput.files[0]); });
 
-function setFile(f) {
+function _pickFile(f) {
   if (!f.name.toLowerCase().endsWith(".pdf")) { showToast("PDF files only", "error"); return; }
-  selectedFile = f;
-  selectedName.textContent = f.name;
-  uploadForm.style.display = "flex";
-  dropZone.style.display = "none";
+  inputSelect.value = "";
+  _setSource(f.name, f);
 }
 
-uploadBtn.addEventListener("click", async () => {
-  if (!selectedFile) return;
-  uploadBtn.disabled = true;
-  uploadBtn.textContent = "Uploading…";
+// Folder picker
+inputSelect.addEventListener("change", () => {
+  const v = inputSelect.value;
+  if (v) { fileInput.value = ""; _setSource(v, null); }
+  else   _clearSource();
+});
 
-  const fd = new FormData();
-  fd.append("file", selectedFile);
-  fd.append("src_lang", document.getElementById("src-lang").value);
-  fd.append("tgt_lang", document.getElementById("tgt-lang").value);
+// Clear selection
+clearFileBtn.addEventListener("click", _clearSource);
+
+// Run button — unified handler for both sources
+runBtn.addEventListener("click", async () => {
+  if (!selectedFile && !selectedFolderFile) return;
+  runBtn.disabled = true;
+  const origHTML = runBtn.innerHTML;
+  runBtn.innerHTML = `<span class="spinner" style="width:12px;height:12px;border-width:2px"></span> Extracting…`;
 
   try {
-    const res = await api("/api/upload", {method:"POST", body:fd});
-    showToast("Upload successful — processing started");
-    selectedFile = null;
-    uploadForm.style.display = "none";
-    dropZone.style.display = "flex";
-    fileInput.value = "";
+    let res;
+    if (selectedFile) {
+      const fd = ocrFormData();
+      fd.append("file", selectedFile);
+      res = await api("/api/upload", {method:"POST", body:fd});
+    } else {
+      res = await api(`/api/inputs/${encodeURIComponent(selectedFolderFile)}/process`, {method:"POST", body:ocrFormData()});
+    }
+    showToast("OCR extraction started");
+    _clearSource();
     await loadJobs();
     selectJob(res.job_id);
   } catch(e) {
-    showToast(e.message || "Upload failed", "error");
+    showToast(e.message || "Extraction failed", "error");
+    runBtn.disabled = false;
   } finally {
-    uploadBtn.disabled = false;
-    uploadBtn.textContent = "Upload & Process";
+    runBtn.innerHTML = origHTML;
   }
 });
 
-newBtn.addEventListener("click", () => { showUploadPane(); loadInputFiles(); });
+newBtn.addEventListener("click", () => { showUploadPane(); loadInputFiles(); loadModelInfo(); });
 importBtn.addEventListener("click", showImportPane);
+
+// ── Model info + OCR settings ─────────────────────────────
+let _defaultPdfProvider = "openrouter";
+let _defaultPdfModel    = "google/gemini-2.0-flash";
+
+async function loadModelInfo() {
+  try {
+    const cfg = await api("/api/config");
+    _defaultPdfProvider = cfg.pdf_provider;
+    _defaultPdfModel    = cfg.pdf_model;
+    const el = document.getElementById("ocr-model-current");
+    if (el) el.textContent = `Server default: ${cfg.pdf_model} via ${cfg.pdf_provider}`;
+    const modelInput = document.getElementById("ocr-model");
+    if (modelInput) modelInput.placeholder = cfg.pdf_model;
+  } catch(_) {}
+  // Populate model list for whichever provider is currently selected
+  const providerEl = document.getElementById("ocr-provider");
+  if (providerEl) await loadProviderModels(providerEl.value || _defaultPdfProvider);
+}
+
+async function loadProviderModels(provider) {
+  const datalist   = document.getElementById("model-suggestions");
+  const statusEl   = document.getElementById("model-load-status");
+  if (!datalist) return;
+  if (provider === "localhost" || !provider) {
+    datalist.innerHTML = "";
+    if (statusEl) statusEl.textContent = "";
+    return;
+  }
+  if (statusEl) statusEl.textContent = "loading…";
+  try {
+    const apiKeyEl = document.getElementById("ocr-api-key");
+    const key = apiKeyEl?.value.trim() || "";
+    const params = new URLSearchParams({provider});
+    if (key) params.set("api_key", key);
+    const res = await api(`/api/models?${params}`);
+    datalist.innerHTML = res.models.map(m =>
+      `<option value="${escHtml(m.id)}" label="${escHtml(m.name)}">`
+    ).join("");
+    if (statusEl) statusEl.textContent = res.models.length
+      ? `${res.models.length} models`
+      : (res.error ? `⚠ ${res.error}` : "no models found");
+  } catch(e) {
+    if (statusEl) statusEl.textContent = "fetch failed";
+  }
+}
+
+const _keyPlaceholders = {
+  "openrouter": "sk-or-v1-… (OpenRouter key)",
+  "openai":     "sk-… (OpenAI key)",
+  "google":     "AIza… (Google AI Studio key — not OpenRouter)",
+  "localhost":  "leave blank",
+  "":           "leave blank — uses server configured key",
+};
+
+function _updateKeyHint(provider) {
+  const el = document.getElementById("ocr-api-key");
+  if (el) el.placeholder = _keyPlaceholders[provider] ?? "leave blank — uses server configured key";
+}
+
+// Reload model list when provider or API key changes
+document.getElementById("ocr-provider")?.addEventListener("change", function() {
+  const p = this.value || _defaultPdfProvider;
+  _updateKeyHint(this.value);
+  loadProviderModels(p);
+});
+// Debounced reload on API key input (useful for Google direct)
+let _keyDebounce = null;
+document.getElementById("ocr-api-key")?.addEventListener("input", function() {
+  clearTimeout(_keyDebounce);
+  const provider = document.getElementById("ocr-provider")?.value || _defaultPdfProvider;
+  if (provider === "google") {
+    _keyDebounce = setTimeout(() => loadProviderModels("google"), 700);
+  }
+});
+
+function ocrFormData() {
+  const fd = new FormData();
+  const provider = document.getElementById("ocr-provider")?.value || "";
+  const model    = document.getElementById("ocr-model")?.value.trim() || "";
+  const apiKey   = document.getElementById("ocr-api-key")?.value.trim() || "";
+  if (provider) fd.append("pdf_provider", provider);
+  if (model)    fd.append("pdf_model",    model);
+  if (apiKey)   fd.append("pdf_api_key",  apiKey);
+  return fd;
+}
 document.getElementById("cancel-import-btn").addEventListener("click", showUploadPane);
 
 // ── Artifact import ───────────────────────────────────────
@@ -1296,55 +1702,19 @@ document.getElementById("do-import-btn").addEventListener("click", async () => {
   }
 });
 
-// ── Input folder picker ───────────────────────────────────
-const inputPicker    = document.getElementById("input-picker");
-const inputSelect    = document.getElementById("input-select");
-const inputLangRow   = document.getElementById("input-lang-row");
-const processInputBtn= document.getElementById("process-input-btn");
-
+// ── Input folder (populated on wizard open) ───────────────
 async function loadInputFiles() {
+  const hint = document.getElementById("folder-empty-hint");
   try {
     const data = await api("/api/inputs");
     inputSelect.innerHTML = `<option value="">— select a file —</option>` +
       data.files.map(f => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join("");
-    if (data.files.length > 0) {
-      inputPicker.style.display = "flex";
-    } else {
-      inputPicker.style.display = "none";
-    }
+    if (hint) hint.style.display = data.files.length ? "none" : "block";
   } catch(e) {
-    inputPicker.style.display = "none";
+    inputSelect.innerHTML = `<option value="">— select a file —</option>`;
+    if (hint) hint.style.display = "block";
   }
 }
-
-inputSelect.addEventListener("change", () => {
-  const chosen = inputSelect.value;
-  inputLangRow.style.display  = chosen ? "flex" : "none";
-  processInputBtn.style.display = chosen ? "inline-flex" : "none";
-});
-
-processInputBtn.addEventListener("click", async () => {
-  const filename = inputSelect.value;
-  if (!filename) return;
-  processInputBtn.disabled = true;
-  processInputBtn.textContent = "Starting…";
-
-  const fd = new FormData();
-  fd.append("src_lang", document.getElementById("input-src-lang").value);
-  fd.append("tgt_lang", document.getElementById("input-tgt-lang").value);
-
-  try {
-    const res = await api(`/api/inputs/${encodeURIComponent(filename)}/process`, {method:"POST", body:fd});
-    showToast("Processing started");
-    await loadJobs();
-    selectJob(res.job_id);
-  } catch(e) {
-    showToast(e.message || "Failed to start processing", "error");
-  } finally {
-    processInputBtn.disabled = false;
-    processInputBtn.textContent = "Process Selected PDF";
-  }
-});
 
 // ── OCRCheck pane ─────────────────────────────────────────
 const ocrTextarea  = document.getElementById("ocr-textarea");
@@ -1493,8 +1863,8 @@ document.getElementById("btn-approve-normalized").addEventListener("click", asyn
   if (jobs.length > 0) {
     selectJob(jobs[0].id);
   } else {
-    // Show upload pane and load input files on first run
     loadInputFiles();
+    loadModelInfo();
   }
 })();
 
@@ -1516,6 +1886,34 @@ document.getElementById("pe-consumer")?.addEventListener("change", function() {
   const sel = document.getElementById("pe-provider-risk");
   if (sel) sel.value = map[this.value] || "trusted_vendor";
 });
+
+async function loadMappingPane(j) {
+  const rows  = document.getElementById("mapping-rows");
+  const empty = document.getElementById("mapping-empty");
+  const table = document.getElementById("mapping-table");
+  rows.innerHTML = `<tr><td colspan="2" style="padding:20px;color:var(--muted)"><div class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block"></div> Loading…</td></tr>`;
+  empty.style.display = "none";
+  table.style.display = "table";
+  try {
+    const data = await api(`/api/jobs/${j.id}/mapping/preview`);
+    const tokens = data.tokens || {};
+    const keys = Object.keys(tokens);
+    if (keys.length === 0) {
+      table.style.display = "none";
+      empty.style.display = "block";
+      return;
+    }
+    rows.innerHTML = keys.sort().map(tok => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:7px 10px;font-family:monospace;color:var(--accent)">${escHtml(tok)}</td>
+        <td style="padding:7px 10px;color:#e07070;font-weight:500">${escHtml(tokens[tok])}</td>
+      </tr>`).join("");
+  } catch(e) {
+    table.style.display = "none";
+    empty.style.display = "block";
+    empty.textContent = e.message?.includes("404") ? "No mapping found. Export the job first." : `Error: ${e.message}`;
+  }
+}
 
 function initPolicyPane(j) {
   peCurrentJobId = j.id;

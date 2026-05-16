@@ -67,48 +67,89 @@ def _strip_fences(text: str) -> str:
     return text.strip()
 
 
-async def _extract_pages(pdf_path: Path, job: Job) -> str:
-    """Render each PDF page as PNG, send to vision LLM, return assembled markdown."""
+def _save_previews(job_id: str, pages_png: list[bytes]) -> None:
+    """Persist rendered page PNGs to data/zone1/previews/{job_id}/."""
+    preview_dir = settings.zone1_previews_dir / job_id
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    for i, png in enumerate(pages_png):
+        p = preview_dir / f"page_{i + 1:03d}.png"
+        p.write_bytes(png)
+        p.chmod(0o600)
+
+
+async def _extract_pages(
+    pdf_path: Path,
+    job: Job,
+    override_provider: str | None = None,
+    override_model: str | None = None,
+    override_api_key: str | None = None,
+) -> str:
+    """Render each PDF page as PNG, save previews, send to vision LLM, return assembled markdown."""
     import fitz  # PyMuPDF
 
     with fitz.open(str(pdf_path)) as doc:
         total = len(doc)
         audit_log.log(job.id, "extraction_pages_detected", {"pages": total})
 
-        semaphore = asyncio.Semaphore(settings.max_concurrent_pages)
+        # Render all pages first so we can save previews regardless of LLM outcome
+        rendered: list[bytes] = []
+        for page in doc:
+            pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+            rendered.append(pix.tobytes("png"))
 
-        async def _one(page_num: int, fitz_page) -> str:
-            # 144 DPI (2× scale) — good quality for medical text without huge payloads
-            pix = fitz_page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
-            image_bytes = pix.tobytes("png")
-            async with semaphore:
-                result = await llm_adapter.pdf_complete_vision(
-                    images=[image_bytes],
-                    text_prompt=_page_prompt(page_num, total),
-                    system=_SYSTEM_PROMPT,
-                )
-            return _strip_fences(result)
+    _save_previews(job.id, rendered)
+    audit_log.log(job.id, "previews_saved", {"pages": len(rendered)})
 
-        pages_md = await asyncio.gather(
-            *[_one(i + 1, page) for i, page in enumerate(doc)]
-        )
+    semaphore = asyncio.Semaphore(settings.max_concurrent_pages)
+
+    async def _one(page_num: int, image_bytes: bytes) -> str:
+        async with semaphore:
+            result = await llm_adapter.pdf_complete_vision(
+                images=[image_bytes],
+                text_prompt=_page_prompt(page_num, total),
+                system=_SYSTEM_PROMPT,
+                override_provider=override_provider,
+                override_model=override_model,
+                override_api_key=override_api_key,
+            )
+        return _strip_fences(result)
+
+    pages_md = await asyncio.gather(
+        *[_one(i + 1, png) for i, png in enumerate(rendered)]
+    )
 
     return "\n\n".join(pages_md)
 
 
-async def run(job: Job, pdf_bytes: bytes) -> Job:
+async def run(
+    job: Job,
+    pdf_bytes: bytes,
+    override_provider: str | None = None,
+    override_model: str | None = None,
+    override_api_key: str | None = None,
+) -> Job:
     pdf_path = settings.input_dir / job.filename
     pdf_path.write_bytes(pdf_bytes)
     audit_log.log(job.id, "pdf_saved", {"path": str(pdf_path)})
 
-    job_store.update_status(job.id, JobStatus.extracting)
+    eff_provider = override_provider or settings.pdf_provider
+    eff_model    = override_model    or settings.pdf_model
+
+    job_store.update_status(job.id, JobStatus.extracting,
+                            pdf_provider=eff_provider, pdf_model=eff_model)
     audit_log.log(job.id, "extraction_started", {
-        "pdf_provider": settings.pdf_provider,
-        "pdf_model": settings.pdf_model,
+        "pdf_provider": eff_provider,
+        "pdf_model": eff_model,
+        "overridden": bool(override_provider or override_model),
     })
 
     try:
-        markdown = await _extract_pages(pdf_path, job)
+        markdown = await _extract_pages(
+            pdf_path, job,
+            override_provider=override_provider,
+            override_model=override_model,
+            override_api_key=override_api_key,
+        )
     except Exception as e:
         job_store.update_status(job.id, JobStatus.failed, error=str(e))
         audit_log.log(job.id, "extraction_failed", {"error": str(e)})
