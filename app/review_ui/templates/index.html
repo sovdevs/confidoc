@@ -492,6 +492,13 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
     <div style="padding:10px 16px;border-top:1px solid var(--border)">
       <button class="btn btn-ghost btn-block btn-sm" id="import-btn">↑ Rehydrate</button>
     </div>
+    <!-- Demo capture panel (shown only when CONFIDOC_DEMO_CAPTURE=true) -->
+    <div id="demo-panel" style="display:none;padding:10px 16px;border-top:1px solid var(--border);background:rgba(0,100,200,0.06)">
+      <div style="font-size:10px;font-weight:700;color:#2563eb;letter-spacing:0.07em;margin-bottom:6px">DEMO CAPTURE</div>
+      <div id="demo-status-line" style="font-size:11px;color:var(--muted);margin-bottom:7px">No active capture</div>
+      <button class="btn btn-ghost btn-block btn-sm" id="demo-start-btn" style="font-size:11px;margin-bottom:4px">Start capture for current job</button>
+      <button class="btn btn-ghost btn-block btn-sm" id="demo-stop-btn" style="font-size:11px;display:none">Stop capture</button>
+    </div>
   </aside>
 
   <main>
@@ -506,6 +513,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           <!-- Source tabs -->
           <div style="display:flex;gap:6px;margin-bottom:14px">
             <button class="view-tab active" id="src-tab-local">Local</button>
+            <button class="view-tab" id="src-tab-demo" style="display:none">Demo</button>
             <button class="view-tab" id="src-tab-server" disabled
                     title="Coming soon" style="opacity:.4;cursor:not-allowed">Server</button>
           </div>
@@ -547,6 +555,16 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
                 No PDFs found in data/input/
               </div>
             </div>
+          </div>
+
+          <!-- Demo source panel (hidden unless demo_capture enabled + Demo tab active) -->
+          <div id="demo-source-panel" style="display:none;margin-top:4px">
+            <div style="font-size:11px;color:#2563eb;font-weight:600;margin-bottom:8px">&#127916; Demo documents <span style="font-weight:400;color:var(--muted)">(synthetic only)</span></div>
+            <select id="demo-file-select"
+                    style="background:var(--surface);color:var(--text);border:1px solid #2563eb55;border-radius:7px;padding:8px 10px;font-size:12px;width:100%">
+              <option value="">— select demo document —</option>
+            </select>
+            <div style="font-size:11px;color:var(--muted);margin-top:5px">Demo capture starts automatically when you process a demo document.</div>
           </div>
 
           <!-- Selected file indicator (shown when any source is chosen) -->
@@ -1051,6 +1069,7 @@ async function selectJob(id) {
   if (["pending","extracting","exporting"].includes(currentJob.status)) {
     startPoll(id);
   }
+  if (_demoCapture) refreshDemoStatus();
 }
 
 function startPoll(id) {
@@ -1660,6 +1679,7 @@ async function loadModelInfo() {
     }
     const modelInput = document.getElementById("ocr-model");
     if (modelInput) modelInput.placeholder = cfg.byok_only ? "required" : cfg.pdf_model;
+    await initDemoCapture(cfg);
   } catch(_) {}
   // Populate model list for whichever provider is currently selected
   const providerEl = document.getElementById("ocr-provider");
@@ -2510,6 +2530,155 @@ function renderPolicyResults(data) {
     });
   }
 }
+
+// ── Demo capture ──────────────────────────────────────────
+let _demoCapture = false;   // set from /api/config
+let _activeDemoRunId = null;
+
+async function initDemoCapture(cfg) {
+  if (!cfg.demo_capture) return;
+  _demoCapture = true;
+  const panel = document.getElementById("demo-panel");
+  if (panel) panel.style.display = "block";
+  const demoTab = document.getElementById("src-tab-demo");
+  if (demoTab) demoTab.style.display = "";
+  await loadDemoFiles();
+  await refreshDemoStatus();
+}
+
+async function loadDemoFiles() {
+  if (!_demoCapture) return;
+  try {
+    const res = await api("/api/demo/inputs");
+    const sel = document.getElementById("demo-file-select");
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— select demo document —</option>';
+    (res.files || []).forEach(f => {
+      const opt = document.createElement("option");
+      opt.value = f; opt.textContent = f;
+      sel.appendChild(opt);
+    });
+  } catch(_) {}
+}
+
+async function refreshDemoStatus() {
+  if (!_demoCapture) return;
+  try {
+    const res = await api("/api/demo/status");
+    const sessions = res.active_sessions || {};
+    const line = document.getElementById("demo-status-line");
+    const startBtn = document.getElementById("demo-start-btn");
+    const stopBtn  = document.getElementById("demo-stop-btn");
+    // Check if current job has an active session
+    const runId = currentJob ? sessions[currentJob.id] : null;
+    _activeDemoRunId = runId || null;
+    if (line) {
+      if (runId) {
+        line.innerHTML = `<span style="color:#2563eb">&#9679; ${escHtml(runId)}</span>`;
+      } else if (Object.keys(sessions).length > 0) {
+        const [jid, rid] = Object.entries(sessions)[0];
+        line.innerHTML = `<span style="color:var(--muted)">Active: ${escHtml(rid.slice(0,18))}…</span>`;
+      } else {
+        line.textContent = "No active capture";
+      }
+    }
+    if (startBtn) startBtn.style.display = (runId || !currentJob) ? "none" : "";
+    if (stopBtn)  stopBtn.style.display  = runId ? "" : "none";
+  } catch(_) {}
+}
+
+// Demo tab toggle
+document.getElementById("src-tab-demo")?.addEventListener("click", function() {
+  document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+  this.classList.add("active");
+  document.getElementById("demo-source-panel").style.display = "block";
+  // Hide the normal local source grid
+  const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
+  if (grid) grid.style.display = "none";
+});
+
+document.getElementById("src-tab-local")?.addEventListener("click", function() {
+  document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+  this.classList.add("active");
+  document.getElementById("demo-source-panel").style.display = "none";
+  const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
+  if (grid) grid.style.display = "";
+});
+
+// Demo file select → sets selectedFolderFile and updates run hint
+document.getElementById("demo-file-select")?.addEventListener("change", function() {
+  const f = this.value;
+  if (!f) return;
+  selectedFolderFile = f;
+  selectedName.textContent = f;
+  document.getElementById("selected-file-row").style.display = "block";
+  document.getElementById("run-btn").disabled = false;
+  document.getElementById("run-hint").textContent = "Demo capture will start automatically.";
+  // Signal that this is a demo file
+  runBtn._isDemo = true;
+});
+
+// Patch runBtn to use demo endpoint when in demo mode
+const _origRunBtnClick = null;
+runBtn.addEventListener("click", async function(e) {
+  if (!_demoCapture || !runBtn._isDemo) return;  // fall through to normal handler if not demo
+  e.stopImmediatePropagation();  // prevent normal handler
+  const origHTML = runBtn.innerHTML;
+  runBtn.disabled = true;
+  runBtn.textContent = "Processing (demo)…";
+  const fd = ocrFormData();
+  fd.append("src_lang", document.getElementById("src-lang")?.value || "de-DE");
+  fd.append("tgt_lang", document.getElementById("tgt-lang")?.value || "en-GB");
+  try {
+    const res = await api(
+      `/api/demo/inputs/${encodeURIComponent(selectedFolderFile)}/process`,
+      {method: "POST", body: fd}
+    );
+    _activeDemoRunId = res.demo_run_id;
+    showToast(`Demo capture started · run: ${res.demo_run_id}`);
+    runBtn._isDemo = false;
+    _clearSource();
+    await loadJobs();
+    selectJob(res.job_id);
+    refreshDemoStatus();
+  } catch(err) {
+    showToast(err.message || "Demo processing failed", "error");
+    runBtn.disabled = false;
+  } finally {
+    runBtn.innerHTML = origHTML;
+  }
+}, true);  // capture phase so it fires before the normal bubble handler
+
+// Demo start button (attach to existing job)
+document.getElementById("demo-start-btn")?.addEventListener("click", async () => {
+  if (!currentJob) { showToast("Select a job first", "error"); return; }
+  const fd = new FormData();
+  fd.append("job_id", currentJob.id);
+  fd.append("label", `Manual capture for ${currentJob.filename}`);
+  try {
+    const res = await api("/api/demo/start", {method:"POST", body:fd});
+    _activeDemoRunId = res.demo_run_id;
+    showToast(`Demo capture started · ${res.demo_run_id}`);
+    refreshDemoStatus();
+  } catch(e) {
+    showToast(e.message || "Failed to start demo capture", "error");
+  }
+});
+
+// Demo stop button
+document.getElementById("demo-stop-btn")?.addEventListener("click", async () => {
+  if (!currentJob) return;
+  const fd = new FormData();
+  fd.append("job_id", currentJob.id);
+  try {
+    await api("/api/demo/stop", {method:"POST", body:fd});
+    _activeDemoRunId = null;
+    showToast("Demo capture stopped");
+    refreshDemoStatus();
+  } catch(e) {
+    showToast(e.message || "Failed", "error");
+  }
+});
 </script>
 </body>
 </html>

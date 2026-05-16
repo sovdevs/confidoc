@@ -38,6 +38,16 @@ class Settings:
     # key is never used — each user must bring their own.
     byok_only: bool = os.getenv("CONFIDOC_BYOK_ONLY", "false").lower() == "true"
 
+    # ── Demo capture mode ─────────────────────────────────────────────────────
+    # When True, pipeline artifacts are captured under data/demo_runs/ for
+    # reproducible demo playback. Default off; never enable in production.
+    demo_capture: bool = os.getenv("CONFIDOC_DEMO_CAPTURE", "false").lower() == "true"
+
+    # Demo input documents (synthetic only — no real PHI)
+    demo_dir: Path = DATA / "demo"
+    # Demo run artifact storage
+    demo_runs_dir: Path = DATA / "demo_runs"
+
     # ── Concurrency ───────────────────────────────────────────────────────────
     max_concurrent_pdfs: int  = int(os.getenv("MAX_CONCURRENT_PDFS",  "3"))
     max_concurrent_pages: int = int(os.getenv("MAX_CONCURRENT_PAGES", "5"))
@@ -60,12 +70,15 @@ class Settings:
     approved_terms: Path = DATA / "approved_terms.jsonl"
 
     def ensure_dirs(self) -> None:
-        for d in (
+        dirs = [
             self.input_dir, self.extracted_dir, self.anonymized_dir,
             self.reviewed_dir, self.normalized_dir, self.exported_dir,
             self.final_dir, self.jobs_dir, self.mappings_dir,
             self.zone1_previews_dir,
-        ):
+        ]
+        if self.demo_capture:
+            dirs += [self.demo_dir, self.demo_runs_dir]
+        for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
 
 

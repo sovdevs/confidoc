@@ -1,6 +1,7 @@
 """Review UI routes — FastAPI router for the HITL anonymization interface."""
 
 import asyncio
+import json
 import re
 from pathlib import Path
 from typing import Annotated
@@ -15,6 +16,7 @@ from app.storage import mappings as mapping_store
 from app.storage import audit_log
 from app.storage import jobs as job_store
 from app.storage.jobs import Entity, Job, JobStatus
+from app.services import demo_capture
 
 _STABLE_TOKEN_RE = re.compile(r'\[[A-Z][A-Z_]*_\d{3}\]')
 
@@ -143,6 +145,9 @@ async def _run_ingest_and_detect(
                                override_api_key=override_api_key)
         job = anon.run(job)
         job = await anon_llm.run(job)
+        # Demo capture: extraction + auto-entity snapshot (no-ops unless demo run active)
+        demo_capture.capture_extraction(job.id, job, pdf_bytes)
+        demo_capture.capture_auto_entities(job.id, job)
     except Exception as e:
         job_store.update_status(job.id, JobStatus.failed, error=str(e))
 
@@ -210,6 +215,13 @@ def add_entity(
     audit_log.log(job_id, "entity_added_manual", {
         "entity_id": new_entity.id, "label": label, "text": text,
     })
+    demo_capture.log_entity_event(
+        job_id, "add", new_entity.id,
+        new_label=label,
+        new_offsets=(start, end),
+        source="manual",
+        safe_display=replacement,  # user-supplied token, not PHI
+    )
     return job_store.load(job_id).model_dump()
 
 
@@ -218,16 +230,35 @@ def add_entity(
 @router.post("/api/jobs/{job_id}/entities/{entity_id}/approve")
 def approve_entity(job_id: str, entity_id: str):
     job = _require_job(job_id)
+    # Capture before state for event log
+    old_entity = next((Entity.model_validate(e) for e in job.entities if e.id == entity_id), None)
     job = _update_entity(job, entity_id, approved=True)
     audit_log.log(job_id, "entity_approved", {"entity_id": entity_id})
+    if old_entity:
+        demo_capture.log_entity_event(
+            job_id, "approve", entity_id,
+            old_label=old_entity.label, new_label=old_entity.label,
+            old_offsets=(old_entity.start, old_entity.end),
+            source="manual",
+            safe_display=old_entity.replacement or old_entity.label,
+        )
     return {"ok": True}
 
 
 @router.post("/api/jobs/{job_id}/entities/{entity_id}/dismiss")
 def dismiss_entity(job_id: str, entity_id: str):
     job = _require_job(job_id)
+    old_entity = next((Entity.model_validate(e) for e in job.entities if e.id == entity_id), None)
     job = _update_entity(job, entity_id, approved=False, dismissed=True)
     audit_log.log(job_id, "entity_dismissed", {"entity_id": entity_id})
+    if old_entity:
+        demo_capture.log_entity_event(
+            job_id, "reject", entity_id,
+            old_label=old_entity.label, new_label=old_entity.label,
+            old_offsets=(old_entity.start, old_entity.end),
+            source="manual",
+            safe_display=old_entity.label,
+        )
     return {"ok": True}
 
 
@@ -235,20 +266,38 @@ def dismiss_entity(job_id: str, entity_id: str):
 def delete_entity(job_id: str, entity_id: str):
     """Permanently remove an entity so the text span can be re-annotated."""
     job = _require_job(job_id)
+    old_entity = next((Entity.model_validate(e) for e in job.entities if e.id == entity_id), None)
     before = len(job.entities)
     job.entities = [e for e in job.entities if e.id != entity_id]
     if len(job.entities) == before:
         raise HTTPException(404, f"Entity {entity_id} not found")
     job_store.save(job)
     audit_log.log(job_id, "entity_deleted", {"entity_id": entity_id})
+    if old_entity:
+        demo_capture.log_entity_event(
+            job_id, "delete", entity_id,
+            old_label=old_entity.label,
+            old_offsets=(old_entity.start, old_entity.end),
+            source="manual",
+            safe_display=old_entity.label,
+        )
     return {"ok": True}
 
 
 @router.post("/api/jobs/{job_id}/entities/{entity_id}/edit")
 def edit_entity(job_id: str, entity_id: str, replacement: Annotated[str, Form()]):
     job = _require_job(job_id)
+    old_entity = next((Entity.model_validate(e) for e in job.entities if e.id == entity_id), None)
     job = _update_entity(job, entity_id, approved=True, replacement=replacement, edited=True)
     audit_log.log(job_id, "entity_edited", {"entity_id": entity_id, "replacement": replacement})
+    if old_entity:
+        demo_capture.log_entity_event(
+            job_id, "edit_text", entity_id,
+            old_label=old_entity.label, new_label=old_entity.label,
+            old_offsets=(old_entity.start, old_entity.end),
+            source="manual",
+            safe_display=replacement,  # replacement is user-supplied token label, not PHI
+        )
     return {"ok": True}
 
 
@@ -262,6 +311,11 @@ def approve_all(job_id: str):
         updated.append(entity.model_dump())
     job_store.update_status(job_id, JobStatus.approved, entities=updated)
     audit_log.log(job_id, "all_entities_approved")
+    demo_capture.log_entity_event(
+        job_id, "approve_all", "all",
+        safe_display=f"{len(updated)} entities approved",
+    )
+    demo_capture.capture_review_final(job_id, job_store.load(job_id))
     return {"ok": True, "count": len(updated)}
 
 
@@ -655,6 +709,9 @@ async def rehydrate_from_export(file: UploadFile = File(...)):
         "output":          str(final_path.relative_to(settings.jobs_dir.parent)),
     })
 
+    # Demo capture: save rehydration artifacts
+    demo_capture.capture_rehydration(job_id, content, filename, rehydrated, token_map)
+
     return Response(
         content=rehydrated,
         media_type=_REHYDRATE_MEDIA.get(ext, "application/octet-stream"),
@@ -920,6 +977,19 @@ def policy_prepare(body: PolicyPrepareBody):
         "tgt_lang": body.tgt_lang or None,
     })
 
+    # Demo capture: copy package into demo run folder
+    demo_capture.capture_export_package(job.id, pkg_dir, {
+        "package_id":      pkg.package_id,
+        "task":            body.task,
+        "consumer_type":   body.consumer_type,
+        "provider_risk":   body.provider_risk,
+        "strictness_mode": body.strictness_mode,
+        "tgt_lang":        body.tgt_lang or None,
+        "profile":         pkg.profile,
+        "selected_strictness": pkg.selected_strictness,
+        "recommended_action":  pkg.manifest.get("recommended_action", ""),
+    })
+
     return _safe_policy_response(pkg)
 
 
@@ -1053,6 +1123,111 @@ def policy_download(package_id: str):
         filename=f"confidoc_package_{package_id}.zip",
         media_type="application/zip",
     )
+
+
+# ── Demo capture API ─────────────────────────────────────────────────────────
+
+def _require_demo_mode() -> None:
+    if not settings.demo_capture:
+        raise HTTPException(403, "Demo capture mode is not enabled (set CONFIDOC_DEMO_CAPTURE=true)")
+
+
+@router.get("/api/demo/inputs")
+def list_demo_inputs():
+    """List synthetic demo PDF documents available in data/demo/."""
+    _require_demo_mode()
+    pdfs = sorted(p.name for p in settings.demo_dir.glob("*.pdf")) if settings.demo_dir.exists() else []
+    return {"files": pdfs}
+
+
+@router.post("/api/demo/inputs/{filename}/process")
+async def process_demo_input(
+    background_tasks: BackgroundTasks,
+    filename: str,
+    src_lang: str = Form("de-DE"),
+    tgt_lang: str = Form("en-GB"),
+    pdf_provider: str = Form(""),
+    pdf_model: str = Form(""),
+    pdf_api_key: str = Form(""),
+):
+    """Process a demo PDF (from data/demo/) and start demo capture automatically."""
+    _require_demo_mode()
+    pdf_path = settings.demo_dir / filename
+    if not pdf_path.exists():
+        raise HTTPException(404, f"{filename} not found in demo directory")
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "PDF files only.")
+
+    pdf_bytes = pdf_path.read_bytes()
+    job = Job(filename=filename, src_lang=src_lang, tgt_lang=tgt_lang)
+    job_store.save(job)
+    audit_log.log(job.id, "job_created", {"filename": filename, "source": "demo"})
+
+    # Start demo capture immediately so pipeline hooks can fire
+    run_id = demo_capture.start_demo_run(job.id, label=f"Demo: {filename}")
+    audit_log.log(job.id, "DEMO_CAPTURE_STARTED", {"demo_run_id": run_id})
+
+    background_tasks.add_task(
+        _run_ingest_and_detect, job, pdf_bytes,
+        pdf_provider or None, pdf_model or None, pdf_api_key or None,
+    )
+    return {"job_id": job.id, "demo_run_id": run_id, "status": job.status}
+
+
+@router.post("/api/demo/start")
+def demo_start(job_id: str = Form(...), label: str = Form("")):
+    """Attach demo capture to an existing job. Creates a new demo_run_id."""
+    _require_demo_mode()
+    _require_job(job_id)
+    run_id = demo_capture.start_demo_run(job_id, label=label)
+    audit_log.log(job_id, "DEMO_CAPTURE_STARTED", {"demo_run_id": run_id, "label": label})
+
+    # Snapshot current state for the job (extraction + entities may already exist)
+    job = job_store.load(job_id)
+    demo_capture.capture_extraction(job_id, job)
+    if job.entities:
+        demo_capture.capture_auto_entities(job_id, job)
+
+    return {"demo_run_id": run_id, "job_id": job_id}
+
+
+@router.post("/api/demo/stop")
+def demo_stop(job_id: str = Form(...)):
+    """Detach demo capture from a job (artifacts are preserved)."""
+    _require_demo_mode()
+    run_id = demo_capture.get_demo_run_id(job_id)
+    demo_capture.stop_demo_run(job_id)
+    audit_log.log(job_id, "DEMO_CAPTURE_STOPPED", {"demo_run_id": run_id})
+    return {"ok": True, "demo_run_id": run_id}
+
+
+@router.get("/api/demo/status")
+def demo_status():
+    """Return active demo sessions and recent demo runs."""
+    _require_demo_mode()
+    from app.services import demo_capture as _dc
+    sessions = _dc._load_sessions()
+    runs = _dc.list_demo_runs()[:10]   # last 10 runs
+    return {"active_sessions": sessions, "recent_runs": runs}
+
+
+@router.get("/api/demo/runs/{demo_run_id}/files")
+def demo_run_files(demo_run_id: str):
+    """List all captured files for a demo run (by stage)."""
+    _require_demo_mode()
+    run_dir = settings.demo_runs_dir / demo_run_id
+    if not run_dir.exists():
+        raise HTTPException(404, "Demo run not found")
+    stages = {}
+    for stage_dir in sorted(run_dir.iterdir()):
+        if stage_dir.is_dir():
+            stages[stage_dir.name] = [
+                {"name": f.name, "size": f.stat().st_size}
+                for f in sorted(stage_dir.iterdir()) if f.is_file()
+            ]
+    meta_path = run_dir / "run_meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+    return {"demo_run_id": demo_run_id, "meta": meta, "stages": stages}
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
