@@ -469,8 +469,10 @@ async def _run_ocrcheck_background(job_id: str, text: str) -> None:
 @router.post("/api/jobs/{job_id}/export")
 def trigger_export(
     job_id: str,
-    reviewer: str = Form("human"),
-    tgt_lang: str = Form(""),
+    reviewer:   str  = Form("human"),
+    tgt_lang:   str  = Form(""),
+    export_tmx: bool = Form(True),
+    export_csv: bool = Form(True),
 ):
     """Zone 1: re-export is always allowed regardless of current status."""
     job = _require_job(job_id)
@@ -478,7 +480,7 @@ def trigger_export(
         job_store.update_status(job_id, job.status, tgt_lang=tgt_lang)
         job = job_store.load(job_id)
     try:
-        job = export.run(job, reviewer=reviewer)
+        job = export.run(job, reviewer=reviewer, export_tmx=export_tmx, export_csv=export_csv)
     except Exception as e:
         raise HTTPException(500, str(e))
     return job.model_dump()
