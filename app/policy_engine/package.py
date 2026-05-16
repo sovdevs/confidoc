@@ -91,7 +91,7 @@ def _sha256(text: str) -> str:
 
 def _packages_dir() -> Path:
     from app.config import settings
-    d = settings.jobs_dir.parent / "prepared_packages"
+    d = settings.prepared_packages_dir
     d.mkdir(parents=True, exist_ok=True)
     return d
 
