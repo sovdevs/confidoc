@@ -27,6 +27,8 @@ data/final/*
 data/jobs/*
 data/mappings/*
 data/prepared_packages/*
+data/zone1/*
+data/zone2/*
 data/audit.jsonl
 data/approved_terms.jsonl
 !data/**/.gitkeep
