@@ -684,11 +684,22 @@ async def rehydrate_from_export(file: UploadFile = File(...)):
     if not job_id:
         raise HTTPException(500, "Package manifest missing job_id")
 
-    # Load encrypted mapping — Zone 1 resource; never leaves this server.
-    # Prefer the package-specific token map (policy engine tokens) over the
-    # job-level map (Zone 1 assign_tokens tokens) — the prepared package files
-    # use policy tokens, not the internal Zone 1 tokens.
-    token_map = mapping_store.load(f"pkg_{package_id}") or mapping_store.load(job_id)
+    # Load the policy token map — stored inside the package dir so it
+    # always co-locates with the package files and survives restarts.
+    token_map = None
+    token_map_path = pkg_dir / "token_map.enc"
+    if token_map_path.exists():
+        try:
+            import json as _json
+            from cryptography.fernet import Fernet as _Fernet
+            from app.storage.mappings import _get_key as _mk
+            payload = _Fernet(_mk()).decrypt(token_map_path.read_bytes())
+            token_map = _json.loads(payload.decode())["tokens"]
+        except Exception:
+            token_map = None
+    # Fallback: legacy mappings-dir location (older packages) or Zone 1 map
+    if token_map is None:
+        token_map = mapping_store.load(f"pkg_{package_id}") or mapping_store.load(job_id)
     if token_map is None:
         raise HTTPException(404,
             "Encrypted token mapping not found for this job. "
@@ -908,14 +919,19 @@ def policy_prepare(body: PolicyPrepareBody):
     except Exception as e:
         raise HTTPException(500, f"Policy engine error: {e}")
 
-    # Save the policy token map so rehydration can reverse Zone 2 tokens.
-    # Keyed by package_id (not job_id) because each package has its own token
-    # numbering — the same job can produce multiple packages with different tokens.
+    # Save the policy token map inside the package directory so it always
+    # co-locates with the package files. Storing it separately in mappings/
+    # risks losing it if the container restarts between prepare and rehydrate.
+    from app.policy_engine.package import _packages_dir
     if pkg.policy_token_map:
-        mapping_store.save(f"pkg_{pkg.package_id}", pkg.policy_token_map)
+        import json as _json
+        from cryptography.fernet import Fernet as _Fernet
+        from app.storage.mappings import _get_key as _mk
+        _pkg_token_path = _packages_dir() / pkg.package_id / "token_map.enc"
+        _payload = _json.dumps({"tokens": pkg.policy_token_map}, ensure_ascii=False).encode()
+        _pkg_token_path.write_bytes(_Fernet(_mk()).encrypt(_payload))
 
     # Generate supplementary export files inside the package directory
-    from app.policy_engine.package import _packages_dir
     from pdf_to_markdown.exporter import md_to_segments, write_tmx
     from app.services.xliff_export import xliff_12, sdlxliff_12
     from app.services.docx_export import md_to_docx
