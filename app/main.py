@@ -1,5 +1,7 @@
 """Confidoc server entry point."""
 
+import json
+import logging
 from pathlib import Path
 
 import httpx
@@ -9,6 +11,39 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.review_ui.routes import router
+
+logger = logging.getLogger(__name__)
+
+
+def _migrate_approved_terms() -> None:
+    """Rename approved_terms.jsonl if it contains raw entity text (PHI leak).
+
+    Detects the old format by checking for a 'text' field in the first entry.
+    The unsafe file is renamed to approved_terms.unsafe.backup.jsonl and a
+    fresh empty file is created. No data is read or processed further.
+    """
+    p = settings.approved_terms
+    if not p.exists() or p.stat().st_size == 0:
+        return
+    try:
+        first_line = p.open(encoding="utf-8").readline()
+        entry = json.loads(first_line)
+        if "text" not in entry:
+            return  # already clean format
+    except Exception:
+        return  # can't parse — leave it alone
+
+    backup = p.parent / "approved_terms.unsafe.backup.jsonl"
+    p.rename(backup)
+    p.touch()
+    p.chmod(0o600)
+    logger.warning(
+        "approved_terms.jsonl contained raw entity text (PHI). "
+        "Renamed to %s. A clean file has been created.", backup
+    )
+
+
+_migrate_approved_terms()
 
 app = FastAPI(title="Confidoc — Secure Document Pipeline")
 

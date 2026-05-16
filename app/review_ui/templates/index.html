@@ -186,14 +186,22 @@ main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .entity-card.dismissed .entity-head { background: #1f0f0f; }
 .entity-label { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
                 letter-spacing: .4px; text-transform: uppercase; }
-.lbl-patient_name { background:#3a0f1a; color:#e06080; }
-.lbl-date         { background:#0f1f40; color:#5b7cf6; }
-.lbl-address      { background:#3a1f08; color:#e5933e; }
-.lbl-location     { background:#1a0f3a; color:#9a6be0; }
-.lbl-case_id      { background:#2a2010; color:#d4b84a; }
-.lbl-id_number    { background:#2a0f2a; color:#c06ac0; }
-.lbl-phone        { background:#082a2a; color:#4ac0c0; }
-.lbl-other        { background:#1a1d27; color:var(--muted); }
+.lbl-patient_name    { background:#3a0f1a; color:#e06080; }
+.lbl-physician_name  { background:#2a0f24; color:#d060a0; }
+.lbl-date            { background:#0f1f40; color:#5b7cf6; }
+.lbl-address         { background:#3a1f08; color:#e5933e; }
+.lbl-location        { background:#1a0f3a; color:#9a6be0; }
+.lbl-case_id         { background:#2a2010; color:#d4b84a; }
+.lbl-id_number       { background:#2a0f2a; color:#c06ac0; }
+.lbl-phone           { background:#082a2a; color:#4ac0c0; }
+.lbl-email           { background:#08202a; color:#4ab0d0; }
+.lbl-organization    { background:#0f2a20; color:#50c090; }
+.lbl-insurance_id    { background:#1a280a; color:#88c040; }
+.lbl-bank_information{ background:#2a1a00; color:#d09030; }
+.lbl-diagnosis       { background:#2a0808; color:#e05040; }
+.lbl-medication      { background:#1a0a2a; color:#a060d0; }
+.lbl-other_pii       { background:#1a1d27; color:#8090a0; }
+.lbl-other           { background:#141720; color:var(--muted); }
 
 .entity-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-left: auto; }
 .entity-status-dot.approved { background: var(--success); }
@@ -928,9 +936,23 @@ function fmtTime(iso) {
 function badgeClass(status) { return `badge badge-${status}`; }
 
 function labelClass(lbl) {
-  const map = { patient_name:"lbl-patient_name", date:"lbl-date", address:"lbl-address",
-                location:"lbl-location", case_id:"lbl-case_id", id_number:"lbl-id_number",
-                phone:"lbl-phone" };
+  const map = {
+    patient_name:     "lbl-patient_name",
+    physician_name:   "lbl-physician_name",
+    date:             "lbl-date",
+    address:          "lbl-address",
+    location:         "lbl-location",
+    case_id:          "lbl-case_id",
+    id_number:        "lbl-id_number",
+    phone:            "lbl-phone",
+    email:            "lbl-email",
+    organization:     "lbl-organization",
+    insurance_id:     "lbl-insurance_id",
+    bank_information: "lbl-bank_information",
+    diagnosis:        "lbl-diagnosis",
+    medication:       "lbl-medication",
+    other_pii:        "lbl-other_pii",
+  };
   return "entity-label " + (map[lbl.toLowerCase()] || "lbl-other");
 }
 

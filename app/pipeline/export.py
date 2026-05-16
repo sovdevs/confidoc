@@ -1,7 +1,9 @@
 """Export stage: tokenize, redact, write TMX/CSV, save encrypted mapping."""
 
 import csv
+import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -15,25 +17,67 @@ from app.storage.jobs import Entity, Job, JobStatus
 from app.pipeline import anon
 
 
-def _log_approved_terms(job: Job, entities: list[Entity]) -> None:
-    """Append approved entities to the LLM few-shot knowledge base.
+# ── PHI-free learning signal helpers ─────────────────────────────────────────
 
-    Logged BEFORE tokenization so the generic label (e.g. [PATIENT_NAME])
-    is recorded, not the numbered token ([PATIENT_NAME_001]).
+def _text_shape(text: str) -> str:
+    """Return structural character-class pattern — no original chars retained.
+
+    Examples:  "Maria Schmidt" → "Aa+ Aa+"
+               "01.01.1980"   → "00.00.0000"
+               "Musterstr. 1" → "Aa+Aa+. 0"
+    """
+    s = re.sub(r'[A-ZÜÄÖÉÀÈÊÂÎÔÙÛÇÑ]', 'A', text)
+    s = re.sub(r'[a-züäöéàèêâîôùûçñß]', 'a', s)
+    s = re.sub(r'\d', '0', s)
+    s = re.sub(r'A{2,}', 'A+', s)
+    s = re.sub(r'a{2,}', 'a+', s)
+    s = re.sub(r'0{2,}', '0+', s)
+    return s
+
+
+def _len_bucket(n: int) -> str:
+    if n <= 4:  return "1-4"
+    if n <= 7:  return "5-7"
+    if n <= 12: return "8-12"
+    if n <= 20: return "13-20"
+    return "21+"
+
+
+def _h(s: str, length: int = 12) -> str:
+    """Non-reversible SHA-256 prefix for correlating signals within a session."""
+    return hashlib.sha256(s.encode()).hexdigest()[:length]
+
+
+def _log_approved_terms(job: Job, entities: list[Entity]) -> None:
+    """Append PHI-free structural learning signals to the learning store.
+
+    PRIVACY GUARANTEE: no raw entity text, no filenames, no reversible values
+    are written. Only character-class shapes and bucketed lengths.
+    The encrypted per-document mapping is the sole store of original values.
     """
     ts = datetime.now(timezone.utc).isoformat()
+    job_hash  = _h(job.id)
+    file_hash = _h(job.filename, 8)
+
     with settings.approved_terms.open("a", encoding="utf-8") as f:
         for e in entities:
             if not e.approved:
                 continue
+            t = e.text
             f.write(json.dumps({
-                "ts": ts,
-                "job_id": job.id,
-                "filename": job.filename,
-                "label": e.label,
-                "text": e.text,
-                "replacement": f"[{e.label}]",   # generic label, never the numbered token
-                "manual": e.manual,
+                "ts":               ts,
+                "job_id_hash":      job_hash,
+                "filename_hash":    file_hash,
+                "label":            e.label,
+                "manual":           e.manual,
+                "source":           "manual_selection" if e.manual else "auto_detected",
+                "text_shape":       _text_shape(t),
+                "char_len_bucket":  _len_bucket(len(t)),
+                "word_count":       len(t.split()),
+                "has_digits":       bool(re.search(r'\d', t)),
+                "has_letters":      bool(re.search(r'[A-Za-züäöüÄÖÜß]', t)),
+                "has_punctuation":  bool(re.search(r'[^\w\s]', t)),
+                "accepted":         True,
             }, ensure_ascii=False) + "\n")
 
 

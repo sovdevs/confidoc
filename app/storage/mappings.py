@@ -76,10 +76,18 @@ def _fernet() -> Fernet:
 def assign_tokens(entities: list[Entity]) -> tuple[list[Entity], dict[str, str]]:
     """Assign stable numbered tokens to all approved entities.
 
+    Canonical reindexing guarantees:
+    - Tokens are numbered sequentially from 001 with no gaps.
+    - Ordering is by character offset (e.start) for determinism.
+    - Deleted entities cannot leave numbering artifacts — counters start
+      fresh from the current approved entity list on every call.
+    - Identity labels: same text → same token within this export.
+    - Occurrence labels (DATE): each span gets its own token.
+
     Returns:
-        updated   — entity list with ``replacement`` set to the stable token;
-                    dismissed entities are returned unchanged with no token.
-        mapping   — {stable_token: original_text} decryption dictionary.
+        updated  — entity list with ``replacement`` set to the stable token;
+                   unapproved entities returned unchanged (replacement = text).
+        mapping  — {stable_token: original_text} decryption dictionary.
     """
     counters: dict[str, int] = defaultdict(int)
     identity_index: dict[tuple[str, str], str] = {}  # (label, text) → token
@@ -89,14 +97,10 @@ def assign_tokens(entities: list[Entity]) -> tuple[list[Entity], dict[str, str]]
 
     for e in sorted(entities, key=lambda e: e.start):
         if not e.approved:
-            # Dismissed or still-pending: original text is preserved in the output.
-            # Set replacement = text so the stored entity is unambiguous — it will
-            # not cause any substitution, and carries no generic label token.
             updated.append(e.model_copy(update={"replacement": e.text}))
             continue
 
         if e.label in _OCCURRENCE_BASED:
-            # New token for every occurrence
             counters[e.label] += 1
             token = f"[{e.label}_{counters[e.label]:03d}]"
         else:
