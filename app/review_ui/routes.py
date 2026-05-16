@@ -529,7 +529,143 @@ def preview_page(job_id: str, page: int):
     return FileResponse(str(png), media_type="image/png")
 
 
-# ── Rehydration ──────────────────────────────────────────────────────────────
+# ── Rehydration (Zone 1 only) ─────────────────────────────────────────────────
+
+_REHYDRATE_EXTS = {".md", ".xliff", ".sdlxliff", ".tmx", ".docx"}
+_REHYDRATE_MEDIA = {
+    ".md":        "text/markdown",
+    ".xliff":     "application/xliff+xml",
+    ".sdlxliff":  "application/xliff+xml",
+    ".tmx":       "application/xml",
+    ".docx":      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+
+@router.post("/api/rehydrate/info")
+async def rehydrate_info(file: UploadFile = File(...)):
+    """Probe a file to extract its embedded package_id without rehydrating.
+
+    Zone 1 only — used by the UI to preview detected package before committing.
+    """
+    import json as _json
+    from app.services.rehydrate_parser import extract_package_id
+    from app.policy_engine.package import _packages_dir
+
+    content = await file.read()
+    filename = file.filename or "uploaded"
+    ext = Path(filename).suffix.lower()
+
+    if ext not in _REHYDRATE_EXTS:
+        return {"found": False, "error": f"Unsupported type '{ext}'"}
+
+    package_id = extract_package_id(content, filename)
+    if not package_id:
+        return {"found": False, "package_id": None}
+
+    pkg_dir = _packages_dir() / package_id
+    if not pkg_dir.exists():
+        return {"found": False, "package_id": package_id,
+                "error": "Package not found on this server"}
+
+    manifest_path = pkg_dir / "manifest.json"
+    if not manifest_path.exists():
+        return {"found": False, "package_id": package_id, "error": "Manifest missing"}
+
+    m = _json.loads(manifest_path.read_text(encoding="utf-8"))
+    return {
+        "found":       True,
+        "package_id":  package_id,
+        "job_id":      m.get("job_id"),
+        "task":        m.get("task"),
+        "profile":     m.get("profile"),
+        "prepared_at": m.get("prepared_at"),
+    }
+
+
+@router.post("/api/rehydrate")
+async def rehydrate_from_export(file: UploadFile = File(...)):
+    """Zone 1 only — replace stable tokens with original PHI.
+
+    The uploaded file must be a Confidoc export with an embedded package_id.
+    Decrypts the per-job mapping (Zone 1 resource) and substitutes tokens.
+    Returns the rehydrated file as a download.
+
+    DOCX: token substitution is run-by-run; formatting may be partially
+    preserved but is not guaranteed across all editors.
+    """
+    import json as _json
+    from fastapi.responses import Response
+    from app.services.rehydrate_parser import extract_package_id, rehydrate_content
+    from app.policy_engine.package import _packages_dir
+
+    content = await file.read()
+    filename = file.filename or "uploaded"
+    ext = Path(filename).suffix.lower()
+
+    if ext not in _REHYDRATE_EXTS:
+        raise HTTPException(400,
+            f"Unsupported file type '{ext}'. "
+            f"Accepted: {', '.join(sorted(_REHYDRATE_EXTS))}")
+
+    # Extract embedded package_id
+    package_id = extract_package_id(content, filename)
+    if not package_id:
+        raise HTTPException(422,
+            "No Confidoc package ID found in this file. "
+            "Only files exported by Confidoc (with embedded package_id) can be rehydrated here. "
+            "DOCX files may lose the package ID if re-saved by an external editor — "
+            "use the original Confidoc-generated DOCX.")
+
+    # Locate package manifest
+    pkg_dir = _packages_dir() / package_id
+    if not pkg_dir.exists():
+        raise HTTPException(404, f"Package '{package_id}' not found on this server.")
+
+    manifest_path = pkg_dir / "manifest.json"
+    if not manifest_path.exists():
+        raise HTTPException(500, "Package manifest missing")
+
+    manifest = _json.loads(manifest_path.read_text(encoding="utf-8"))
+    job_id = manifest.get("job_id")
+    if not job_id:
+        raise HTTPException(500, "Package manifest missing job_id")
+
+    # Load encrypted mapping — Zone 1 resource; never leaves this server
+    token_map = mapping_store.load(job_id)
+    if token_map is None:
+        raise HTTPException(404,
+            "Encrypted token mapping not found for this job. "
+            "Rehydration requires the Zone 1 MAPPING_KEY.")
+
+    # Apply token substitution
+    try:
+        rehydrated = rehydrate_content(content, filename, token_map)
+    except Exception as exc:
+        raise HTTPException(500, f"Rehydration failed: {exc}")
+
+    stem = Path(filename).stem
+    final_name = f"{stem}_rehydrated{ext}"
+    final_path = settings.final_dir / final_name
+    final_path.write_bytes(rehydrated)
+
+    audit_log.log(job_id, "REHYDRATION_FROM_EXPORT", {
+        "package_id":      package_id,
+        "filename":        filename,
+        "tokens_replaced": len(token_map),
+        "output":          str(final_path.relative_to(settings.jobs_dir.parent)),
+    })
+
+    return Response(
+        content=rehydrated,
+        media_type=_REHYDRATE_MEDIA.get(ext, "application/octet-stream"),
+        headers={
+            "Content-Disposition":          f'attachment; filename="{final_name}"',
+            "X-Confidoc-Job-Id":            job_id,
+            "X-Confidoc-Package-Id":        package_id,
+            "X-Confidoc-Tokens-Replaced":   str(len(token_map)),
+        },
+    )
+
 
 @router.post("/api/jobs/{job_id}/rehydrate")
 def rehydrate(job_id: str, reviewer: str = Form("system")):
@@ -725,6 +861,13 @@ def policy_prepare(body: PolicyPrepareBody):
 
     if prepared_path.exists():
         prepared_md = prepared_path.read_text(encoding="utf-8")
+
+        # Embed package_id in prepared.md as HTML comment (first line)
+        pkg_marker = f"<!-- confidoc-package:{pkg.package_id} -->"
+        if not prepared_md.startswith(pkg_marker):
+            prepared_md = f"{pkg_marker}\n{prepared_md}"
+            prepared_path.write_text(prepared_md, encoding="utf-8")
+
         segments = md_to_segments(prepared_md)
         tgt = body.tgt_lang or job.tgt_lang or "und"
 
@@ -737,23 +880,38 @@ def policy_prepare(body: PolicyPrepareBody):
                 writer.writerow([i, seg])
 
         if body.task == "translation":
-            # TMX — bilingual translation memory
-            write_tmx(segments, job.src_lang, tgt, pkg_dir / f"{stem}.tmx")
+            # TMX — bilingual translation memory (patch to embed package_id)
+            tmx_path = pkg_dir / f"{stem}.tmx"
+            write_tmx(segments, job.src_lang, tgt, tmx_path)
+            tmx_text = tmx_path.read_text(encoding="utf-8")
+            tmx_text = tmx_text.replace(
+                '<?xml version="1.0" encoding="utf-8"?>',
+                f'<?xml version="1.0" encoding="utf-8"?>\n<!-- confidoc-package:{pkg.package_id} -->',
+                1,
+            )
+            tmx_path.write_text(tmx_text, encoding="utf-8")
 
             # XLIFF 1.2 — generic CAT tool format
             (pkg_dir / f"{stem}.xliff").write_bytes(
-                xliff_12(segments, job.src_lang, tgt, original=f"{stem}.md")
+                xliff_12(segments, job.src_lang, tgt, original=f"{stem}.md",
+                         package_id=pkg.package_id)
             )
 
             # SDL XLIFF — Trados Studio compatible
             (pkg_dir / f"{stem}.sdlxliff").write_bytes(
-                sdlxliff_12(segments, job.src_lang, tgt, original=f"{stem}.md")
+                sdlxliff_12(segments, job.src_lang, tgt, original=f"{stem}.md",
+                            package_id=pkg.package_id)
             )
 
             # DOCX — Word document for translators
             (pkg_dir / f"{stem}.docx").write_bytes(
-                md_to_docx(prepared_md, job.src_lang, tgt, title=stem)
+                md_to_docx(prepared_md, job.src_lang, tgt, title=stem,
+                           package_id=pkg.package_id)
             )
+
+        # Regenerate ZIP so it includes all export files
+        from app.policy_engine.package import zip_package
+        zip_package(pkg_dir)
 
     audit_log.log(job.id, "POLICY_PACKAGE_CREATED_VIA_UI", {
         "package_id": pkg.package_id,
@@ -810,9 +968,8 @@ def list_job_packages(job_id: str):
 def package_files(package_id: str):
     """List downloadable files inside a package (Zone 2 safe files only)."""
     from app.policy_engine.package import _packages_dir
-    _SAFE_EXTS = {".md", ".tmx", ".xliff", ".sdlxliff", ".docx", ".csv",
-                  ".json", ".zip"}
-    _SKIP = {"manifest.json"}  # served via /report instead
+    _SAFE_EXTS = {".md", ".tmx", ".xliff", ".sdlxliff", ".docx", ".csv", ".zip"}
+    _SKIP = {"preview.md"}  # internal only; full content in /report
     pkg_dir = _packages_dir() / package_id
     if not pkg_dir.exists():
         raise HTTPException(404, "Package not found")
@@ -833,7 +990,7 @@ def package_file_download(package_id: str, filename: str):
         raise HTTPException(404, "Package not found")
     # Prevent path traversal
     file_path = (pkg_dir / filename).resolve()
-    if not str(file_path).startswith(str(pkg_dir.resolve())):
+    if not file_path.is_relative_to(pkg_dir.resolve()):
         raise HTTPException(400, "Invalid filename")
     if not file_path.exists() or file_path.suffix not in _SAFE_EXTS:
         raise HTTPException(404, "File not found")

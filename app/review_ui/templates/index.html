@@ -490,7 +490,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
     </div>
     <div id="job-list"><div class="empty" style="padding:40px 0"><div class="spinner"></div></div></div>
     <div style="padding:10px 16px;border-top:1px solid var(--border)">
-      <button class="btn btn-ghost btn-block btn-sm" id="import-btn">↑ Import artifact</button>
+      <button class="btn btn-ghost btn-block btn-sm" id="import-btn">↑ Rehydrate</button>
     </div>
   </aside>
 
@@ -611,48 +611,76 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
       </div>
     </div>
 
-    <!-- Import pane (separate from upload) -->
-    <div id="import-pane" style="display:none;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:20px;padding:40px">
-      <div style="width:100%;max-width:440px">
-        <h2 style="font-size:15px;margin-bottom:4px">Import Artifact</h2>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:20px">Resume from any pipeline stage — extracted, pseudonymized, or normalized markdown.</p>
-        <div style="display:flex;flex-direction:column;gap:12px">
+    <!-- Rehydrate pane (Zone 1 only) -->
+    <div id="import-pane" style="display:none;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:20px;padding:40px;overflow-y:auto">
+      <div style="width:100%;max-width:480px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+          <div class="z1-dot"></div>
+          <span style="font-size:11px;font-weight:700;color:var(--zone1);letter-spacing:0.07em">ZONE 1 ONLY</span>
+        </div>
+        <h2 style="font-size:16px;margin-bottom:6px">Rehydrate</h2>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:20px">Upload a translated Confidoc export. The original PHI will be restored using the encrypted Zone 1 token mapping. <strong>Only the Zone 1 operator can perform this &mdash; the mapping key never leaves this server.</strong></p>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
           <div class="form-group">
-            <label>Pipeline stage</label>
-            <select id="import-stage" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:13px">
-              <option value="extracted">Extracted markdown → entity review</option>
-              <option value="pseudonymized">Pseudonymized markdown → OCR check</option>
-              <option value="normalized">Normalized markdown → export</option>
-            </select>
+            <label>Translated file <span style="font-weight:400;color:var(--muted)">(.md &middot; .xliff &middot; .sdlxliff &middot; .tmx &middot; .docx)</span></label>
+            <input type="file" id="rehydrate-file" accept=".md,.xliff,.sdlxliff,.tmx,.docx"
+                   style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;width:100%">
           </div>
-          <div class="form-group">
-            <label>Markdown file (.md)</label>
-            <input type="file" id="import-file" accept=".md"
-                   style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px">
+
+          <div id="rehydrate-docx-warn" style="display:none;background:rgba(200,150,0,0.12);border:1px solid rgba(200,150,0,0.35);border-radius:7px;padding:10px 13px;font-size:12px;color:#c8960c">
+            &#9888; <strong>DOCX warning:</strong> the package ID is stored in file metadata keywords. Re-saving in Word or another editor may erase it &mdash; use the original Confidoc-generated DOCX where possible.
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Source language</label>
-              <select id="import-src-lang" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px">
-                <option value="de-DE">German (de-DE)</option>
-                <option value="en-GB">English (UK)</option>
-                <option value="en-US">English (US)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Target language</label>
-              <select id="import-tgt-lang" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px">
-                <option value="en-GB">English (UK)</option>
-                <option value="en-US">English (US)</option>
-                <option value="de-DE">German</option>
-              </select>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-primary" id="do-import-btn">Import</button>
-            <button class="btn btn-ghost" id="cancel-import-btn">Cancel</button>
+
+          <div id="rehydrate-info" style="display:none;border-radius:7px;padding:11px 13px;font-size:12px"></div>
+
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary" id="rehydrate-btn" disabled>Rehydrate &amp; Download</button>
+            <button class="btn btn-ghost" id="cancel-rehydrate-btn">Cancel</button>
           </div>
         </div>
+
+        <details style="margin-top:30px;border-top:1px solid var(--border);padding-top:18px">
+          <summary style="font-size:12px;color:var(--muted);cursor:pointer;user-select:none;list-style:none">&#9658; Advanced &mdash; import as pipeline artifact</summary>
+          <p style="font-size:11px;color:var(--muted);margin:10px 0 14px">Resume a job from a pipeline stage using a .md file. For internal use only &mdash; this does <em>not</em> rehydrate translated content.</p>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div class="form-group">
+              <label>Pipeline stage</label>
+              <select id="import-stage" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:13px">
+                <option value="extracted">Extracted markdown &rarr; entity review</option>
+                <option value="pseudonymized">Pseudonymized markdown &rarr; OCR check</option>
+                <option value="normalized">Normalized markdown &rarr; export</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Markdown file (.md)</label>
+              <input type="file" id="import-file" accept=".md"
+                     style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Source language</label>
+                <select id="import-src-lang" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px">
+                  <option value="de-DE">German (de-DE)</option>
+                  <option value="en-GB">English (UK)</option>
+                  <option value="en-US">English (US)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Target language</label>
+                <select id="import-tgt-lang" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px">
+                  <option value="en-GB">English (UK)</option>
+                  <option value="en-US">English (US)</option>
+                  <option value="de-DE">German</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" id="do-import-btn">Import artifact</button>
+              <button class="btn btn-ghost btn-sm" id="cancel-import-btn">Cancel</button>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -1704,9 +1732,95 @@ function ocrFormData() {
   if (apiKey)   fd.append("pdf_api_key",  apiKey);
   return fd;
 }
+document.getElementById("cancel-rehydrate-btn").addEventListener("click", showUploadPane);
 document.getElementById("cancel-import-btn").addEventListener("click", showUploadPane);
 
-// ── Artifact import ───────────────────────────────────────
+// ── Rehydrate file probe (auto-detect package on file select) ─────────────
+document.getElementById("rehydrate-file").addEventListener("change", async function() {
+  const f = this.files?.[0];
+  const infoEl   = document.getElementById("rehydrate-info");
+  const warnEl   = document.getElementById("rehydrate-docx-warn");
+  const rehydBtn = document.getElementById("rehydrate-btn");
+  infoEl.style.display = "none";
+  warnEl.style.display = "none";
+  rehydBtn.disabled = true;
+  if (!f) return;
+
+  const ext = f.name.split(".").pop().toLowerCase();
+  if (ext === "docx") warnEl.style.display = "block";
+
+  const fd = new FormData();
+  fd.append("file", f);
+  infoEl.style.display = "block";
+  infoEl.style.background = "var(--surface)";
+  infoEl.style.border = "1px solid var(--border)";
+  infoEl.style.color = "var(--text)";
+  infoEl.textContent = "Detecting package…";
+  try {
+    const info = await api("/api/rehydrate/info", {method:"POST", body:fd});
+    if (!info.found) {
+      infoEl.style.background = "rgba(200,0,0,0.08)";
+      infoEl.style.border = "1px solid rgba(200,0,0,0.3)";
+      infoEl.style.color = "var(--danger,#c0392b)";
+      infoEl.innerHTML = `&#10007; ${escHtml(info.error || "No Confidoc package ID found in this file.")}`;
+      rehydBtn.disabled = true;
+    } else {
+      const d = new Date(info.prepared_at).toLocaleString();
+      infoEl.style.background = "rgba(0,160,0,0.07)";
+      infoEl.style.border = "1px solid rgba(0,160,0,0.25)";
+      infoEl.style.color = "var(--text)";
+      infoEl.innerHTML =
+        `&#10003; Package detected<br>` +
+        `<span style="opacity:.7">ID: <code>${escHtml(info.package_id)}</code></span><br>` +
+        `<span style="opacity:.7">Task: ${escHtml(info.task || "—")} &nbsp;·&nbsp; Prepared: ${escHtml(d)}</span>`;
+      rehydBtn.disabled = false;
+    }
+  } catch(e) {
+    infoEl.innerHTML = `&#10007; ${escHtml(e.message || "Probe failed")}`;
+    infoEl.style.color = "var(--danger,#c0392b)";
+  }
+});
+
+// ── Rehydrate submit ──────────────────────────────────────
+document.getElementById("rehydrate-btn").addEventListener("click", async () => {
+  const fileEl = document.getElementById("rehydrate-file");
+  const f = fileEl.files?.[0];
+  if (!f) { showToast("Select a file first", "error"); return; }
+  const btn = document.getElementById("rehydrate-btn");
+  const origHTML = btn.innerHTML;
+  btn.disabled = true; btn.textContent = "Rehydrating…";
+  const fd = new FormData();
+  fd.append("file", f);
+  try {
+    const resp = await fetch("/api/rehydrate", {method:"POST", body:fd});
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({detail: resp.statusText}));
+      throw new Error(err.detail || "Rehydration failed");
+    }
+    const blob = await resp.blob();
+    const cd = resp.headers.get("content-disposition") || "";
+    const fnMatch = cd.match(/filename="([^"]+)"/);
+    const dlName = fnMatch ? fnMatch[1] : f.name.replace(/(\.[^.]+)$/, "_rehydrated$1");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = dlName;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    const replaced = resp.headers.get("x-confidoc-tokens-replaced") || "?";
+    showToast(`Rehydrated — ${replaced} tokens restored. Download started.`);
+    fileEl.value = "";
+    document.getElementById("rehydrate-info").style.display = "none";
+    document.getElementById("rehydrate-docx-warn").style.display = "none";
+    btn.disabled = true;
+  } catch(e) {
+    showToast(e.message || "Rehydration failed", "error");
+  } finally {
+    btn.innerHTML = origHTML;
+  }
+});
+
+// ── Artifact import (Advanced section) ───────────────────
 document.getElementById("do-import-btn").addEventListener("click", async () => {
   const fileEl = document.getElementById("import-file");
   const f = fileEl.files?.[0];
@@ -2196,14 +2310,16 @@ async function loadExportHistory(jobId) {
 
     listEl.innerHTML = data.packages.map(pkg => {
       const files = fileListMap[pkg.package_id] || [];
+      const _HIDE = new Set(["preview.md", "manifest.json", "risk_report.json",
+                             "usefulness_report.json", "transformation_log.json"]);
       const fileLinks = files
-        .filter(f => !f.name.endsWith(".json"))  // reports shown via Report link
+        .filter(f => !_HIDE.has(f.name))
         .map(f => {
           const ext = f.name.includes(".") ? "." + f.name.split(".").pop() : "";
           const icon  = _FILE_ICON[ext]  || "📎";
           const label = _FILE_LABEL[ext] || ext.slice(1).toUpperCase();
           return `<a href="/api/policy/packages/${escHtml(pkg.package_id)}/files/${escHtml(f.name)}"
-                     download="${escHtml(f.name)}" target="_blank"
+                     download="${escHtml(f.name)}"
                      style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:var(--border);border-radius:4px;font-size:11px;color:var(--text);text-decoration:none"
                      title="${escHtml(f.name)}">${icon} ${label}</a>`;
         }).join("");

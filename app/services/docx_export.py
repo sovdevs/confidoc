@@ -67,7 +67,7 @@ def _add_table(doc: Document, rows: list[str]) -> None:
                     run.bold = True
 
 
-def md_to_docx(markdown: str, src_lang: str, tgt_lang: str, title: str = "") -> bytes:
+def md_to_docx(markdown: str, src_lang: str, tgt_lang: str, title: str = "", package_id: str = "") -> bytes:
     """Convert anonymized markdown to DOCX bytes."""
     doc = Document()
 
@@ -75,7 +75,10 @@ def md_to_docx(markdown: str, src_lang: str, tgt_lang: str, title: str = "") -> 
     core = doc.core_properties
     if title:
         core.title = title
-    core.keywords = "confidoc; anonymized; translation"
+    kw_parts = ["confidoc", "anonymized", "translation"]
+    if package_id:
+        kw_parts.append(f"confidoc-package:{package_id}")
+    core.keywords = "; ".join(kw_parts)
 
     # Cover note
     note = doc.add_paragraph()

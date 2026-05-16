@@ -26,10 +26,15 @@ def xliff_12(
     src_lang: str,
     tgt_lang: str,
     original: str = "confidoc-export.md",
+    package_id: str = "",
 ) -> bytes:
     """Standard XLIFF 1.2 — blank targets, state=new."""
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
+    ]
+    if package_id:
+        lines.append(f'<!-- confidoc-package:{package_id} -->')
+    lines += [
         '<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">',
         f'  <file source-language="{_esc(src_lang)}"'
         f' target-language="{_esc(tgt_lang)}"'
@@ -54,6 +59,7 @@ def sdlxliff_12(
     src_lang: str,
     tgt_lang: str,
     original: str = "confidoc-export.md",
+    package_id: str = "",
 ) -> bytes:
     """SDL XLIFF 1.2 — blank targets with Trados seg-defs metadata.
 
@@ -62,6 +68,10 @@ def sdlxliff_12(
     """
     lines = [
         '<?xml version="1.0" encoding="utf-8"?>',
+    ]
+    if package_id:
+        lines.append(f'<!-- confidoc-package:{package_id} -->')
+    lines += [
         '<xliff version="1.2"',
         '       xmlns="urn:oasis:names:tc:xliff:document:1.2"',
         '       xmlns:sdl="http://sdl.com/FileTypes/SdlXliff/1.0">',

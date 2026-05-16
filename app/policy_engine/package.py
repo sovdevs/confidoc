@@ -480,15 +480,14 @@ def save_package(
     return pkg_dir
 
 
+_ZIP_SAFE_EXTS = {".md", ".json", ".tmx", ".xliff", ".sdlxliff", ".docx", ".csv"}
+
+
 def zip_package(pkg_dir: Path) -> Path:
     """Create a Zone 2 transfer ZIP. Never includes mapping files or original PHI."""
-    allowed = {
-        "prepared.md", "manifest.json", "risk_report.json",
-        "usefulness_report.json", "transformation_log.json", "preview.md",
-    }
     zip_path = pkg_dir.parent / f"{pkg_dir.name}.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in pkg_dir.iterdir():
-            if f.name in allowed:
+        for f in sorted(pkg_dir.iterdir()):
+            if f.suffix in _ZIP_SAFE_EXTS:
                 zf.write(f, f.name)
     return zip_path
