@@ -15,6 +15,7 @@ data/mappings/.key
 # ── PDFs (never commit patient/confidential documents) ─────
 *.pdf
 *.PDF
+!data/demo/*.pdf
 
 # ── All runtime data (persisted on Render's disk, not git) ─
 data/input/*
