@@ -1,0 +1,59 @@
+profile: ml_feature_extraction
+description: Prepare a document for ML feature extraction. Strong de-identification, clinical facts preserved.
+default_strictness: strict
+rehydration_required: false
+
+usefulness:
+  threshold: 0.70
+  weights:
+    coded_diagnoses_preserved: 0.25
+    measurements_preserved: 0.25
+    medications_preserved: 0.15
+    procedures_preserved: 0.15
+    demographic_band_preserved: 0.10
+    enough_structured_content_remaining: 0.10
+
+entity_rules:
+  PATIENT_NAME:
+    action: remove
+  PHYSICIAN_NAME:
+    action: remove
+  ADDRESS:
+    action: remove
+  PHONE:
+    action: remove
+  EMAIL:
+    action: remove
+  INSURANCE_ID:
+    action: remove
+  CASE_ID:
+    action: remove
+  ID_NUMBER:
+    action: remove
+  DOB:
+    action: age_band_from_dob
+  DATE:
+    action: relative_date
+    relative_date:
+      mode: offset
+      anchor: REPORT_DATE
+  REPORT_DATE:
+    action: stable_token
+    token_type: REPORT_DATE
+  VISIT_DATE:
+    action: relative_date
+    relative_date:
+      mode: offset
+      anchor: REPORT_DATE
+  LOCATION:
+    action: remove
+  DIAGNOSIS:
+    action: keep
+  MEDICATION:
+    action: keep
+  LAB_VALUE:
+    action: keep
+  PROCEDURE:
+    action: keep
+  RARE_CONDITION:
+    action: flag_for_review

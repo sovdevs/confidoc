@@ -1,7 +1,7 @@
 # Confidoc — Implementation Notes
 
 Secure document pipeline for pseudonymising confidential (primarily German medical) PDFs
-before translation export. Built on top of the `pdf-to-markdown` library.
+before translation export or downstream processing. Built on top of the `pdf-to-markdown` library.
 
 ---
 
@@ -37,7 +37,41 @@ PDF upload  (or artifact import at any stage)
 [Translation]     External TMX/CSV handed to translator (pseudonymized throughout)
     ▼
 [Rehydration]     Encrypted mapping + authorized user → final reconstructed document
+
+
+         ─── or, instead of/after export ───
+
+    ▼
+[8. Policy Engine]  Task-specific anonymization package for Zone 2 consumers
+                    (translators, LLMs, researchers, public release)
+                    Profile-driven rules + strictness + usefulness/risk scoring
+                    Output: prepared.md + manifest/reports ZIP — no PHI, no mapping
 ```
+
+### Zone Architecture (Policy Engine)
+
+```
+Zone 1: Identifiable Source Zone
+  original PDF · extracted Markdown · approved entities
+  encrypted token mapping · source backup
+
+        ↓  PolicyRequest (task · profile · strictness · consumer type)
+
+  Confidoc Policy Engine
+  entity transformation rules · usefulness checks · risk checks
+
+        ↓  PreparedPackage (no PHI, no mapping)
+
+Zone 2: Anonymized Processing Zone
+  human translator · LLM · external researcher · vendor
+
+        ↓  (authorized rehydration only)
+
+Zone 3: Controlled Rehydration Zone
+  authorized clinician/HCP · decrypt mapping · restore identifiers
+```
+
+**Critical rule:** Zone 2 never receives the original PDF, original text, or decrypted token mapping.
 
 Entry points — any saved artifact can re-enter at the correct stage:
 
@@ -223,6 +257,120 @@ In production this endpoint must be restricted to the `final_approver` role
 
 ---
 
+### 8. Policy Engine (`app/policy_engine/`)
+
+The Policy Engine sits between the identifiable source (Zone 1) and any downstream
+consumer (Zone 2). It is available from the **🔒 Policy** tab on any reviewed, normalized,
+or done job.
+
+Full documentation: [`POLICY_ENGINE.md`](POLICY_ENGINE.md)
+
+#### Core components
+
+| Module | Responsibility |
+|---|---|
+| `engine.py` | `prepare()` entry point; routes `max_allowable` vs single-strictness runs |
+| `profiles.py` | Loads YAML profiles from `profiles/`; returns `ProfileConfig` |
+| `transformer.py` | Applies transformation actions to each approved entity |
+| `strictness.py` | Escalation table; provider risk floor; `resolve_action()` |
+| `usefulness.py` | 18 deterministic weighted checks; compares score to profile threshold |
+| `risk.py` | 9 re-identification risk checks; produces direct/quasi/overall risk score |
+| `package.py` | Writes prepared package files; `_assert_no_token_leak()` security assertion |
+| `models.py` | `PolicyRequest`, `PreparedPackage`, `TransformationEntry`, `MaxAllowableDecision` |
+
+#### Transformation actions
+
+| Action | Output | Example |
+|---|---|---|
+| `stable_token` | Numbered placeholder | `[PATIENT_001]` |
+| `remove` | Label placeholder | `[REMOVED_ADDRESS]` |
+| `age_from_dob` | Exact age | `age 51` |
+| `age_band_from_dob` | 10-year band | `age band 50-59` |
+| `relative_date` | Day offset or numbered token | `Day -30` / `[DATE_001]` |
+| `coarse_relative_date` | Week offset | `[~-4w from report]` |
+| `generalize` | Region or country | `Bayern` / `[REGION]` |
+| `date_shift` | Consistent date shift per job | |
+| `keep` | Original text preserved | (clinical content) |
+| `flag_for_review` | Original text + risk warning | (quasi-identifier) |
+
+DOB reference date priority: `REPORT_DATE` entity → `document_date` from request → today.
+
+#### Strictness levels
+
+| Level | Behaviour |
+|---|---|
+| `minimal` | Direct identifiers tokenized; most content preserved |
+| `balanced` | Profile default rules applied |
+| `strict` | `keep` → `flag_for_review` for quasi-identifiers |
+| `maximum` | `stable_token` → `remove` (unless `rehydration_required: true`) |
+| `max_allowable` | Tries maximum → strict → balanced → minimal; picks strictest passing level |
+
+Provider risk floor: `cloud_llm` and `external_researcher` → minimum `strict`;
+`public` → minimum `maximum`; `trusted_internal` → `minimal` allowed.
+
+#### Prepared package
+
+Every `prepare()` call writes to `data/prepared_packages/<package_id>/`:
+
+```
+prepared.md               ← anonymized document for Zone 2
+manifest.json             ← summary, counts, decision, recommendation, checksums
+risk_report.json          ← direct/quasi risk assessment
+usefulness_report.json    ← weighted check breakdown
+transformation_log.json   ← what was done to each entity (no original PHI)
+preview.md                ← human-readable summary for UI rendering
+```
+
+`_assert_no_token_leak()` runs after every write and raises `RuntimeError` if any
+Zone 1 secret (token map, original text, raw PHI) appears in any package file.
+
+#### Profiles (`profiles/`)
+
+| Profile | Task | Default strictness | Usefulness threshold |
+|---|---|---|---|
+| `translation.yaml` | translation | balanced | 0.78 |
+| `clinical_summary.yaml` | clinical_summary | strict | 0.90 |
+| `ml_feature_extraction.yaml` | ml_feature_extraction | strict | 0.70 |
+| `research_extract.yaml` | research_extract | maximum | 0.60 |
+| `public_release.yaml` | public_release | maximum | 0.40 |
+
+`rehydration_required: true` (set on translation profile) preserves `stable_token`
+even at `maximum` strictness so downstream translators can rehydrate.
+
+#### API endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/policy/prepare` | Run engine, returns safe summary (no PHI, no mapping) |
+| `GET /api/policy/packages/{id}/report` | Full report JSON + preview.md |
+| `GET /api/policy/packages/{id}/download` | Stream ZIP (Zone 2 safe) |
+
+`_safe_policy_response()` explicitly excludes `policy_token_map` and all Zone 1 fields
+before returning JSON to the browser.
+
+#### UI (🔒 Policy tab)
+
+Available on jobs with status `reviewing`, `approved`, `normalizing`, `normalized`, or `done`.
+
+Left column — form:
+- Task selector (translation / clinical_summary / ml_feature_extraction / research_extract / public_release)
+- Strictness selector (max_allowable / balanced / strict / maximum / minimal)
+- Consumer type (auto-derives provider risk)
+- **Prepare Package** button
+
+Right column — results (rendered after prepare):
+- Recommendation badge (Approved / Review Required / Reject) with color coding
+- Warning banner when `review_required` or `reject`
+- Risk card: overall / direct / quasi scores + warnings
+- Usefulness card: score bar + per-check weighted breakdown table
+- Strictness selection table (max_allowable mode only)
+- Transformation summary (action counts)
+- Preview.md rendered via marked.js
+- Download Package ZIP button
+- Zone 1 security notice
+
+---
+
 ## Artifact import (`POST /api/import`)
 
 Any pipeline artifact can be imported as a new resumable job:
@@ -281,13 +429,19 @@ data/
   final/              rehydrated final documents (post-translation)
   jobs/               one JSON file per job (full state machine)
   mappings/           encrypted per-job token maps ({job_id}.enc)
-  audit.jsonl         append-only event log
+  prepared_packages/  Zone 2 prepared packages (one dir per package_id)
+                        prepared.md · manifest.json · risk_report.json
+                        usefulness_report.json · transformation_log.json
+                        preview.md · (optional) package.zip
+  audit.jsonl         append-only event log (pipeline + policy engine)
   approved_terms.jsonl  PII feedback log — feeds LLM few-shot pass
 ```
 
 ---
 
 ## Audit events
+
+### Pipeline events
 
 | Event | When |
 |---|---|
@@ -309,6 +463,21 @@ data/
 | `OCRCHECK_AUTOFIX` | Auto-fix applied |
 | `OCRCHECK_APPROVED` | Normalization approved |
 | `REHYDRATION_PERFORMED` | Final document reconstructed |
+
+### Policy Engine events
+
+| Event | Logged fields |
+|---|---|
+| `POLICY_PROFILE_SELECTED` | task, profile, strictness |
+| `POLICY_PREPARATION_STARTED` | task, consumer_type, provider_risk |
+| `POLICY_TRANSFORMATION_APPLIED` | entities_processed, strictness |
+| `POLICY_USEFULNESS_CHECKED` | score, passes, task |
+| `POLICY_RISK_CHECKED` | risk_score |
+| `POLICY_STRICTNESS_SELECTED` | selected, mode |
+| `POLICY_PACKAGE_CREATED` | package_id, recommended_action |
+| `POLICY_PACKAGE_EXPORTED` | package_id, zip_path |
+
+Raw PHI is never logged in any event.
 
 ---
 
@@ -378,3 +547,40 @@ teams.
 **Manual entities survive re-detect** — reviewers invest time adding missed spans;
 those survive pattern updates and LLM re-runs unless the auto pass now covers the
 exact same character span.
+
+**Policy Engine is a separate layer, not a replacement for pseudonymization** — the
+pipeline (stages 1–7) produces a pseudonymized document with a fully rehydratable
+mapping. The Policy Engine (stage 8) is an independent preparation step that decides
+what to share with a specific consumer for a specific task. The two layers serve
+different purposes: the pipeline preserves all information under controlled access;
+the Policy Engine minimises information for downstream use.
+
+**Zone 1 security is enforced programmatically** — `_assert_no_token_leak()` in
+`package.py` reads every file written to a prepared package and raises `RuntimeError`
+if any token map value, original entity text, or other Zone 1 secret appears.
+The `_safe_policy_response()` route helper enforces the same constraint at the API
+boundary — `policy_token_map` and `prepared_text` are explicitly excluded from all
+JSON responses, not just omitted by convention.
+
+**max_allowable iterates from strictest to least strict** — the engine tries maximum →
+strict → balanced → minimal and returns the first level whose usefulness score meets
+the profile threshold. This guarantees the consumer receives the most aggressively
+anonymized document that still serves the task, without requiring the operator to
+guess which level to use.
+
+**rehydration_required preserves stable_token at maximum strictness** — for translation
+workflows the downstream translator must be able to map tokens back to originals.
+Setting `rehydration_required: true` in the profile exempts `stable_token` entities
+from the `maximum` escalation that would otherwise convert them to `remove`.
+
+**Usefulness checks are deterministic, not LLM-based** — scores are computed from
+regex and structural checks (diagnoses present, dates present, enough text, section
+headers intact, etc.) to keep the Policy Engine fast, auditable, and free of external
+API calls at preparation time.
+
+**Tests: 84 passing across 7 modules** — see `POLICY_ENGINE.md` for the full test
+matrix. Run with:
+```bash
+cd /Users/vmac/PycharmProjects/upworkProjects/confidoc
+uv run pytest tests/policy_engine/ -v
+```

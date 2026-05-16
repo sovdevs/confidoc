@@ -26,9 +26,13 @@ data/exported/*
 data/final/*
 data/jobs/*
 data/mappings/*
+data/prepared_packages/*
 data/audit.jsonl
 data/approved_terms.jsonl
 !data/**/.gitkeep
+
+# ── Local dev dumps ─────────────────────────────────────────
+zshdumps/
 
 # ── Build artefacts ────────────────────────────────────────
 dist/

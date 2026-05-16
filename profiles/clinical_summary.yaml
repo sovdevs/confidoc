@@ -1,0 +1,67 @@
+profile: clinical_summary
+description: Prepare a document for clinical summary or report-writing. Preserves clinical meaning.
+default_strictness: strict
+rehydration_required: false
+
+usefulness:
+  threshold: 0.90
+  weights:
+    diagnoses_preserved: 0.25
+    measurements_preserved: 0.20
+    chronology_preserved: 0.20
+    treatment_plan_preserved: 0.15
+    medications_preserved: 0.10
+    section_structure_preserved: 0.10
+
+entity_rules:
+  PATIENT_NAME:
+    action: stable_token
+    token_type: PATIENT
+  PHYSICIAN_NAME:
+    action: remove
+  ADDRESS:
+    action: remove
+  PHONE:
+    action: remove
+  EMAIL:
+    action: remove
+  INSURANCE_ID:
+    action: remove
+  CASE_ID:
+    action: stable_token
+    token_type: CASE
+  ID_NUMBER:
+    action: remove
+  DOB:
+    action: age_band_from_dob
+  DATE:
+    action: relative_date
+    relative_date:
+      mode: offset
+      anchor: REPORT_DATE
+  REPORT_DATE:
+    action: stable_token
+    token_type: REPORT_DATE
+  VISIT_DATE:
+    action: relative_date
+    relative_date:
+      mode: offset
+      anchor: REPORT_DATE
+  LOCATION:
+    action: generalize
+    location_mode: city_to_region
+  DIAGNOSIS:
+    action: keep
+  MEDICATION:
+    action: keep
+  LAB_VALUE:
+    action: keep
+  PROCEDURE:
+    action: keep
+  RARE_CONDITION:
+    action: keep
+    flag: reidentification_risk
+
+strictness_overrides:
+  maximum:
+    LOCATION: generalize

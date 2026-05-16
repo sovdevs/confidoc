@@ -1,0 +1,12 @@
+[
+  {"id": "e001", "label": "PATIENT_NAME", "text": "Maria Schmidt",  "start": 51,  "end": 64,  "replacement": "[PATIENT_NAME]", "approved": true,  "dismissed": false, "edited": false, "manual": false},
+  {"id": "e002", "label": "DOB",          "text": "08.07.1972",    "start": 81,  "end": 91,  "replacement": "[DOB]",          "approved": true,  "dismissed": false, "edited": false, "manual": false},
+  {"id": "e003", "label": "ADDRESS",      "text": "Lindenweg 12, 65189 Wiesbaden", "start": 101, "end": 130, "replacement": "[ADDRESS]", "approved": true, "dismissed": false, "edited": false, "manual": false},
+  {"id": "e004", "label": "PHYSICIAN_NAME","text": "Dr. Klaus Brandt","start": 141, "end": 156, "replacement": "[PHYSICIAN]",  "approved": true,  "dismissed": false, "edited": false, "manual": false},
+  {"id": "e005", "label": "REPORT_DATE",  "text": "11.10.2023",    "start": 165, "end": 175, "replacement": "[DATE]",         "approved": true,  "dismissed": false, "edited": false, "manual": false},
+  {"id": "e006", "label": "CASE_ID",      "text": "4829103",       "start": 188, "end": 195, "replacement": "[CASE_ID]",      "approved": true,  "dismissed": false, "edited": false, "manual": false},
+  {"id": "e007", "label": "DIAGNOSIS",    "text": "Uterusmyomatosus (D25.9)", "start": 210, "end": 234, "replacement": "[DIAGNOSIS]", "approved": true, "dismissed": false, "edited": false, "manual": false},
+  {"id": "e008", "label": "LOCATION",     "text": "Wiesbaden",     "start": 126, "end": 135, "replacement": "[LOCATION]",    "approved": true,  "dismissed": false, "edited": false, "manual": false},
+  {"id": "e009", "label": "PHONE",        "text": "+49 611 123456","start": 400, "end": 415, "replacement": "[PHONE]",        "approved": false, "dismissed": true,  "edited": false, "manual": false},
+  {"id": "e010", "label": "MEDICATION",   "text": "Ferrosanol",    "start": 450, "end": 460, "replacement": "[MEDICATION]",  "approved": true,  "dismissed": false, "edited": false, "manual": false}
+]

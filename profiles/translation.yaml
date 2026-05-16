@@ -1,0 +1,70 @@
+profile: translation
+description: Prepare a document for translation while hiding direct identifiers.
+default_strictness: balanced
+rehydration_required: true
+
+usefulness:
+  threshold: 0.78
+  weights:
+    sentence_meaning_preserved: 0.30
+    terminology_preserved: 0.25
+    placeholders_stable: 0.20
+    gender_context_preserved: 0.10
+    section_structure_preserved: 0.10
+    chronology_preserved: 0.05
+
+entity_rules:
+  PATIENT_NAME:
+    action: stable_token
+    token_type: PATIENT
+  PHYSICIAN_NAME:
+    action: stable_token
+    token_type: PHYSICIAN
+  ADDRESS:
+    action: remove
+  PHONE:
+    action: remove
+  EMAIL:
+    action: remove
+  INSURANCE_ID:
+    action: remove
+  CASE_ID:
+    action: stable_token
+    token_type: CASE
+  MEDICAL_RECORD_NUMBER:
+    action: stable_token
+    token_type: MRN
+  ID_NUMBER:
+    action: remove
+  DOB:
+    action: age_from_dob
+  DATE:
+    action: stable_token
+    token_type: DATE
+  REPORT_DATE:
+    action: stable_token
+    token_type: REPORT_DATE
+  VISIT_DATE:
+    action: stable_token
+    token_type: VISIT_DATE
+  LOCATION:
+    action: generalize
+    location_mode: exact_to_placeholder
+  DIAGNOSIS:
+    action: keep
+  MEDICATION:
+    action: keep
+  LAB_VALUE:
+    action: keep
+  PROCEDURE:
+    action: keep
+  RARE_CONDITION:
+    action: keep
+    flag: reidentification_risk
+
+strictness_overrides:
+  strict:
+    DOB: age_from_dob
+  maximum:
+    DOB: age_band_from_dob
+    LOCATION: generalize

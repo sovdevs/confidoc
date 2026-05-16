@@ -514,6 +514,170 @@ def download(job_id: str, fmt: str):
     return FileResponse(path, filename=path.name)
 
 
+# ── Policy Engine ────────────────────────────────────────────────────────────
+
+from pydantic import BaseModel as _BM
+
+class PolicyPrepareBody(_BM):
+    job_id: str
+    task: str
+    strictness_mode: str = "max_allowable"
+    consumer_type: str = "trusted_vendor"
+    provider_risk: str = "trusted_vendor"
+
+
+def _safe_policy_response(pkg) -> dict:
+    """Return package summary with NO PHI, NO token_map."""
+    from app.policy_engine.package import _build_risk_report, _build_usefulness_report, _build_transformation_log
+    from app.policy_engine.profiles import load_profile
+
+    profile = load_profile(pkg.profile)
+    risk    = _build_risk_report(pkg)
+    use_rep = _build_usefulness_report(pkg, type("R", (), {"task": pkg.profile})(), profile)
+    log_rep = _build_transformation_log(pkg)
+
+    resp: dict = {
+        "package_id":          pkg.package_id,
+        "job_id":              pkg.job_id,
+        "profile":             pkg.profile,
+        "selected_strictness": pkg.selected_strictness,
+        "prepared_at":         pkg.prepared_at.isoformat(),
+        "recommended_action":  pkg.manifest.get("recommended_action", "unknown"),
+        "risk": {
+            "risk_score":             risk["risk_score"],
+            "direct_identifier_risk": risk["direct_identifier_risk"],
+            "quasi_identifier_risk":  risk["quasi_identifier_risk"],
+            "summary":                risk["summary"],
+            "warnings":               risk["warnings"],
+        },
+        "usefulness": {
+            "score":     use_rep["score"],
+            "threshold": use_rep["threshold"],
+            "passes":    use_rep["passes"],
+            "status":    use_rep["status"],
+            "summary":   use_rep["summary"],
+            "weighted_checks": use_rep["weighted_checks"],
+        },
+        "transformation_summary": {
+            "total":     log_rep["total_entities_processed"],
+            "by_action": log_rep["by_action"],
+        },
+    }
+
+    if pkg.max_allowable_decision:
+        d = pkg.max_allowable_decision
+        resp["max_allowable_decision"] = {
+            "levels_tried":    d.levels_tried,
+            "scores_by_level": {k: round(v, 3) for k, v in d.scores_by_level.items()},
+            "selected":        d.selected,
+            "reason":          d.reason,
+            "provider_floor":  d.provider_floor,
+        }
+
+    return resp
+
+
+@router.post("/api/policy/prepare")
+def policy_prepare(body: PolicyPrepareBody):
+    """Run the Policy Engine for a reviewed job. Returns report (no PHI, no mapping)."""
+    from app.policy_engine.engine import prepare as pe_prepare
+    from app.policy_engine.models import PolicyRequest
+
+    job = _require_job(body.job_id)
+
+    # Use original extracted markdown — must exist for offset-based transformation
+    source_field = None
+    for candidate in ("extracted_md", "reviewed_md", "normalized_md"):
+        if getattr(job, candidate):
+            source_field = candidate
+            break
+
+    if not source_field:
+        raise HTTPException(400, "No source markdown available for this job")
+
+    source_path = settings.jobs_dir.parent / getattr(job, source_field)
+    if not source_path.exists():
+        raise HTTPException(404, "Source markdown file not found on disk")
+
+    document_text = source_path.read_text(encoding="utf-8")
+    entities = [Entity.model_validate(e) for e in job.entities]
+
+    request = PolicyRequest(
+        job_id=job.id,
+        task=body.task,
+        strictness_mode=body.strictness_mode,
+        consumer_type=body.consumer_type,
+        provider_risk=body.provider_risk,
+        document_text=document_text,
+        entities=entities,
+        source_language=job.src_lang,
+        target_language=job.tgt_lang,
+    )
+
+    try:
+        pkg = pe_prepare(request, save=True)
+    except Exception as e:
+        raise HTTPException(500, f"Policy engine error: {e}")
+
+    audit_log.log(job.id, "POLICY_PACKAGE_CREATED_VIA_UI", {
+        "package_id": pkg.package_id,
+        "task": body.task,
+        "strictness": pkg.selected_strictness,
+    })
+
+    return _safe_policy_response(pkg)
+
+
+@router.get("/api/policy/packages/{package_id}/report")
+def policy_report(package_id: str):
+    """Return the full report for a prepared package (no PHI, no mapping)."""
+    from app.policy_engine.package import _packages_dir
+    import json as _json
+
+    pkg_dir = _packages_dir() / package_id
+    if not pkg_dir.exists():
+        raise HTTPException(404, "Package not found")
+
+    def _read_json(name):
+        p = pkg_dir / name
+        return _json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+
+    preview_md = (pkg_dir / "preview.md").read_text(encoding="utf-8") \
+        if (pkg_dir / "preview.md").exists() else ""
+    prepared_md = (pkg_dir / "prepared.md").read_text(encoding="utf-8") \
+        if (pkg_dir / "prepared.md").exists() else ""
+
+    return {
+        "package_id":       package_id,
+        "manifest":         _read_json("manifest.json"),
+        "risk_report":      _read_json("risk_report.json"),
+        "usefulness_report":_read_json("usefulness_report.json"),
+        "transformation_log":_read_json("transformation_log.json"),
+        "preview_md":       preview_md,
+        "prepared_md":      prepared_md,   # Zone 2 safe — already anonymized
+    }
+
+
+@router.get("/api/policy/packages/{package_id}/download")
+def policy_download(package_id: str):
+    """Download the prepared package ZIP (Zone 2 safe — no mapping, no original PHI)."""
+    from app.policy_engine.package import _packages_dir, zip_package
+
+    pkg_dir = _packages_dir() / package_id
+    if not pkg_dir.exists():
+        raise HTTPException(404, "Package not found")
+
+    zip_path = pkg_dir.parent / f"{package_id}.zip"
+    if not zip_path.exists():
+        zip_path = zip_package(pkg_dir)
+
+    return FileResponse(
+        str(zip_path),
+        filename=f"confidoc_package_{package_id}.zip",
+        media_type="application/zip",
+    )
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _require_job(job_id: str) -> Job:

@@ -13,9 +13,27 @@ DATA = Path(os.getenv("DATA_DIR", str(ROOT / "data")))
 
 
 class Settings:
+    # ── Legacy / fallback key ─────────────────────────────────────────────────
+    # Used as the default API key when a profile-specific key is not set.
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
-    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-    max_concurrent_pdfs: int = int(os.getenv("MAX_CONCURRENT_PDFS", "3"))
+
+    # ── PDF extraction profile ────────────────────────────────────────────────
+    # Handles scanned page → Markdown via vision LLM.
+    # Default: Gemini 2.0 Flash via OpenRouter.
+    pdf_provider: str = os.getenv("CONFIDOC_PDF_PROVIDER", "openrouter")
+    pdf_model: str    = os.getenv("CONFIDOC_PDF_MODEL",    "google/gemini-2.0-flash")
+    pdf_api_key: str  = os.getenv("CONFIDOC_PDF_API_KEY",  os.getenv("OPENROUTER_API_KEY", os.getenv("GOOGLE_API_KEY", "")))
+    pdf_base_url: str = os.getenv("CONFIDOC_PDF_BASE_URL", "")  # for localhost provider
+
+    # ── Anonymization / PII detection profile ─────────────────────────────────
+    # Handles the LLM PII detection pass (text-only, JSON output).
+    anon_provider: str = os.getenv("CONFIDOC_ANON_PROVIDER", "openrouter")
+    anon_model: str    = os.getenv("CONFIDOC_ANON_MODEL",    "google/gemini-2.0-flash")
+    anon_api_key: str  = os.getenv("CONFIDOC_ANON_API_KEY",  os.getenv("OPENROUTER_API_KEY", os.getenv("GOOGLE_API_KEY", "")))
+    anon_base_url: str = os.getenv("CONFIDOC_ANON_BASE_URL", "")
+
+    # ── Concurrency ───────────────────────────────────────────────────────────
+    max_concurrent_pdfs: int  = int(os.getenv("MAX_CONCURRENT_PDFS",  "3"))
     max_concurrent_pages: int = int(os.getenv("MAX_CONCURRENT_PAGES", "5"))
 
     host: str = os.getenv("HOST", "127.0.0.1")

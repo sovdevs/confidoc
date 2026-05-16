@@ -1,0 +1,61 @@
+profile: research_extract
+description: Strongly de-identified document for external research or dataset creation.
+default_strictness: maximum
+rehydration_required: false
+
+usefulness:
+  threshold: 0.60
+  weights:
+    diagnoses_preserved: 0.25
+    measurements_preserved: 0.25
+    procedures_preserved: 0.15
+    medications_preserved: 0.10
+    demographic_band_preserved: 0.10
+    enough_structured_content_remaining: 0.15
+
+entity_rules:
+  PATIENT_NAME:
+    action: remove
+  PHYSICIAN_NAME:
+    action: remove
+  ADDRESS:
+    action: remove
+  PHONE:
+    action: remove
+  EMAIL:
+    action: remove
+  INSURANCE_ID:
+    action: remove
+  CASE_ID:
+    action: remove
+  ID_NUMBER:
+    action: remove
+  DOB:
+    action: age_band_from_dob
+  DATE:
+    action: relative_date
+    relative_date:
+      mode: offset
+      anchor: REPORT_DATE
+  REPORT_DATE:
+    action: relative_date
+    relative_date:
+      mode: token
+  VISIT_DATE:
+    action: relative_date
+    relative_date:
+      mode: offset
+      anchor: REPORT_DATE
+  LOCATION:
+    action: generalize
+    location_mode: city_to_country
+  DIAGNOSIS:
+    action: keep
+  MEDICATION:
+    action: keep
+  LAB_VALUE:
+    action: keep
+  PROCEDURE:
+    action: keep
+  RARE_CONDITION:
+    action: flag_for_review

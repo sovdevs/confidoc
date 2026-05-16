@@ -1,0 +1,50 @@
+profile: public_release
+description: Maximum anonymization for public examples or demos.
+default_strictness: maximum
+rehydration_required: false
+
+usefulness:
+  threshold: 0.40
+  weights:
+    general_topic_preserved: 0.30
+    no_direct_identifiers: 0.30
+    enough_context_for_demo: 0.20
+    section_structure_preserved: 0.20
+
+entity_rules:
+  PATIENT_NAME:
+    action: remove
+  PHYSICIAN_NAME:
+    action: remove
+  ADDRESS:
+    action: remove
+  PHONE:
+    action: remove
+  EMAIL:
+    action: remove
+  INSURANCE_ID:
+    action: remove
+  CASE_ID:
+    action: remove
+  ID_NUMBER:
+    action: remove
+  DOB:
+    action: age_band_from_dob
+  DATE:
+    action: remove
+  REPORT_DATE:
+    action: remove
+  VISIT_DATE:
+    action: remove
+  LOCATION:
+    action: remove
+  DIAGNOSIS:
+    action: keep
+  MEDICATION:
+    action: keep
+  LAB_VALUE:
+    action: keep
+  PROCEDURE:
+    action: keep
+  RARE_CONDITION:
+    action: remove
