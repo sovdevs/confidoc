@@ -717,6 +717,47 @@ def policy_prepare(body: PolicyPrepareBody):
     return _safe_policy_response(pkg)
 
 
+@router.get("/api/jobs/{job_id}/packages")
+def list_job_packages(job_id: str):
+    """Return all export packages created for this job, newest first."""
+    import json as _json
+    from app.policy_engine.package import _packages_dir
+
+    _require_job(job_id)
+    pkgs_dir = _packages_dir()
+    if not pkgs_dir.exists():
+        return {"packages": []}
+
+    results = []
+    for pkg_dir in pkgs_dir.iterdir():
+        if not pkg_dir.is_dir():
+            continue
+        manifest_path = pkg_dir / "manifest.json"
+        if not manifest_path.exists():
+            continue
+        try:
+            m = _json.loads(manifest_path.read_text(encoding="utf-8"))
+            if m.get("job_id") != job_id:
+                continue
+            results.append({
+                "package_id":         pkg_dir.name,
+                "created_at":         m.get("prepared_at", ""),
+                "task":               m.get("task", ""),
+                "profile":            m.get("profile", ""),
+                "strictness":         m.get("strictness", ""),
+                "consumer_type":      m.get("consumer_type", ""),
+                "provider_risk":      m.get("provider_risk", ""),
+                "recommended_action": m.get("recommended_action", ""),
+                "usefulness_score":   m.get("clinical_facts_preserved_score"),
+                "risk_level":         m.get("risk_score", ""),
+            })
+        except Exception:
+            continue
+
+    results.sort(key=lambda x: x["created_at"], reverse=True)
+    return {"packages": results}
+
+
 @router.get("/api/policy/packages/{package_id}/report")
 def policy_report(package_id: str):
     """Return the full report for a prepared package (no PHI, no mapping)."""

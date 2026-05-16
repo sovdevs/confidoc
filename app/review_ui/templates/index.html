@@ -756,65 +756,67 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
       </div>
 
       <!-- Policy Engine pane -->
+      <!-- Export pane (formerly Policy) -->
       <div id="policy-pane">
         <div class="pe-layout">
-          <!-- Left: configuration form -->
+
+          <!-- Left: simplified export form -->
           <div class="pe-form-col">
-            <h3>Prepare for Task</h3>
+            <h3>Create Export Package</h3>
 
             <div class="form-group">
-              <label>Task / Profile</label>
-              <select id="pe-task">
-                <option value="translation">Translation</option>
-                <option value="clinical_summary">Clinical Summary</option>
-                <option value="ml_feature_extraction">ML Feature Extraction</option>
-                <option value="research_extract">Research Extract</option>
-                <option value="public_release">Public Release</option>
+              <label>Export purpose</label>
+              <select id="pe-purpose">
+                <option value="translation">Translation package</option>
+                <option value="llm_clinical">LLM – Clinical Summary</option>
+                <option value="llm_extraction">LLM – Feature Extraction</option>
+                <option value="research">Research package</option>
+                <option value="public_release">Public release package</option>
               </select>
+              <div id="pe-purpose-desc" style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5"></div>
             </div>
 
             <div class="form-group">
-              <label>Strictness Mode</label>
-              <select id="pe-strictness">
-                <option value="max_allowable">Max Allowable (recommended)</option>
-                <option value="balanced">Balanced</option>
-                <option value="strict">Strict</option>
-                <option value="maximum">Maximum</option>
-                <option value="minimal">Minimal</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>Recipient / Consumer</label>
-              <select id="pe-consumer">
-                <option value="external_translator">External Translator</option>
-                <option value="internal_clinician">Internal Clinician</option>
+              <label>Recipient / destination</label>
+              <select id="pe-recipient">
+                <option value="internal">Internal user</option>
+                <option value="trusted_vendor">Trusted vendor</option>
+                <option value="local_llm">Local LLM</option>
                 <option value="cloud_llm">Cloud LLM</option>
-                <option value="local_llm">Local LLM</option>
-                <option value="external_researcher">External Researcher</option>
-                <option value="trusted_vendor">Trusted Vendor</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>Provider Risk Level</label>
-              <select id="pe-provider-risk">
-                <option value="trusted_vendor">Trusted Vendor</option>
-                <option value="trusted_internal">Trusted Internal</option>
-                <option value="cloud_llm">Cloud LLM (strict floor)</option>
-                <option value="local_llm">Local LLM</option>
-                <option value="external_researcher">External Researcher</option>
+                <option value="external_researcher">External researcher</option>
                 <option value="public">Public</option>
               </select>
             </div>
 
+            <div class="form-group">
+              <label>Privacy level</label>
+              <select id="pe-privacy">
+                <option value="recommended">Recommended</option>
+                <option value="more_readable">More readable</option>
+                <option value="more_private">More private</option>
+                <option value="maximum">Maximum privacy</option>
+              </select>
+              <div id="pe-privacy-desc" style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5"></div>
+            </div>
+
             <button class="btn btn-primary btn-block" id="pe-prepare-btn" style="margin-top:4px">
-              Prepare Package
+              Prepare Export Package
             </button>
             <div id="pe-error" style="display:none;font-size:12px;color:var(--danger);margin-top:8px;line-height:1.5"></div>
 
-            <div style="margin-top:auto;padding-top:20px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.6">
-              Zone 2 package contains:<br>
+            <!-- Zone 1 internal download -->
+            <div style="margin-top:16px;padding:12px;background:var(--zone1-bg);border:1px solid var(--zone1-border);border-radius:8px">
+              <div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#e07070;margin-bottom:5px;text-transform:uppercase">Zone 1 — Internal only</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+                Download the reviewed Markdown with pseudonymization placeholders intact. May still contain reversible tokens. <strong style="color:#e07070">Do not send externally.</strong>
+              </div>
+              <a id="pe-zone1-dl" href="#" class="btn btn-ghost btn-sm btn-block" style="border-color:var(--zone1-border)">
+                ↓ Reviewed Markdown (Zone 1 debug)
+              </a>
+            </div>
+
+            <div style="margin-top:12px;font-size:11px;color:var(--muted);line-height:1.6;border-top:1px solid var(--border);padding-top:12px">
+              Export packages contain:<br>
               prepared.md · manifest · risk report<br>
               usefulness report · transformation log<br><br>
               <strong style="color:var(--danger)">Never included:</strong><br>
@@ -822,20 +824,29 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             </div>
           </div>
 
-          <!-- Right: results -->
-          <div class="pe-results-col">
+          <!-- Right: current result + history -->
+          <div class="pe-results-col" style="display:flex;flex-direction:column;overflow:hidden">
             <div id="pe-empty" class="empty" style="flex:0">
               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
-              <span style="font-size:13px">Select a task and click Prepare</span>
+              <span style="font-size:13px">Choose a purpose and recipient, then click Prepare</span>
             </div>
-            <div id="pe-loading" style="display:none" class="empty" style="flex:0">
+            <div id="pe-loading" style="display:none" class="empty">
               <div class="spinner"></div>
               <span style="font-size:13px">Preparing package…</span>
             </div>
-            <div id="pe-results" style="display:none"><!-- filled by JS --></div>
+            <div id="pe-results" style="display:none;flex:0"><!-- filled by JS --></div>
+
+            <!-- Export history -->
+            <div id="pe-history" style="flex:1;overflow-y:auto;border-top:1px solid var(--border);display:none">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);padding:12px 16px 8px">
+                Export history — this document
+              </div>
+              <div id="pe-history-list" style="padding:0 12px 12px"></div>
+            </div>
           </div>
+
         </div>
       </div>
 
@@ -1161,7 +1172,7 @@ function renderViewTabs(j) {
   let html = `<button class="view-tab ${viewMode==="entities"?"active":""}" data-view="entities">Entities</button>`;
   if (canNormalize) html += `<button class="view-tab ${viewMode==="ocr"?"active":""}" data-view="ocr">OCR Check</button>`;
   if (canMapping)   html += `<button class="view-tab ${viewMode==="mapping"?"active":""}" data-view="mapping">🔑 Mapping</button>`;
-  if (canPolicy)    html += `<button class="view-tab ${viewMode==="policy"?"active":""}" data-view="policy">🔒 Policy</button>`;
+  if (canPolicy)    html += `<button class="view-tab ${viewMode==="policy"?"active":""}" data-view="policy">Export</button>`;
   tabs.innerHTML = html;
   tabs.querySelectorAll(".view-tab").forEach(btn =>
     btn.addEventListener("click", () => { viewMode = btn.dataset.view; renderDetail(); })
@@ -1210,17 +1221,15 @@ function renderActions(j) {
       <button class="btn btn-ghost btn-sm" id="btn-redetect" title="Re-run with improved patterns">↺ Re-detect</button>
       <button class="btn btn-ghost btn-sm" id="btn-approve-all">Approve All</button>
       ${j.reviewed_md ? `<button class="btn btn-ghost btn-sm" id="btn-normalize">OCR Check</button>` : ""}
-      <button class="btn btn-primary btn-sm" id="btn-export">Export</button>
+      <button class="btn btn-primary btn-sm" id="btn-go-export">Export →</button>
     `;
   } else if (j.status === "normalizing") {
-    html = `
-      <button class="btn btn-ghost btn-sm" id="btn-export">Export</button>
-    `;
+    html = `<span style="font-size:12px;color:var(--warning)">OCR Check in progress</span>`;
   } else if (j.status === "normalized") {
     html = `
       <span style="font-size:12px;color:var(--success)">✓ Normalized</span>
       <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr">↩ Edit OCR Check</button>
-      <button class="btn btn-primary btn-sm" id="btn-export">Export</button>
+      <button class="btn btn-primary btn-sm" id="btn-go-export">Export →</button>
     `;
   } else if (j.status === "exporting") {
     html = `<span class="proc-badge"><span class="spinner"></span>Exporting…</span>`;
@@ -1233,7 +1242,7 @@ function renderActions(j) {
       <button class="btn btn-ghost btn-sm" id="btn-approve-all">Approve All</button>
       <button class="btn btn-ghost btn-sm" id="btn-redetect">↺ Re-detect</button>
       <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr">↩ Edit OCR Check</button>
-      <button class="btn btn-primary btn-sm" id="btn-export">↺ Re-export</button>
+      <button class="btn btn-primary btn-sm" id="btn-go-export">Export →</button>
     `;
   } else if (j.status === "failed") {
     html = `<span style="font-size:12px;color:var(--danger)">✗ Failed</span>`;
@@ -1243,9 +1252,11 @@ function renderActions(j) {
 
   el.querySelector("#btn-redetect")?.addEventListener("click", redetect);
   el.querySelector("#btn-approve-all")?.addEventListener("click", approveAll);
-  el.querySelector("#btn-export")?.addEventListener("click", triggerExport);
   el.querySelector("#btn-normalize")?.addEventListener("click", () => {
     viewMode = "ocr"; renderDetail();
+  });
+  el.querySelector("#btn-go-export")?.addEventListener("click", () => {
+    viewMode = "policy"; renderDetail();
   });
   el.querySelector("#btn-reopen-ocr")?.addEventListener("click", async () => {
     try {
@@ -1411,18 +1422,10 @@ function renderTextPreview(j) {
 }
 
 function renderExportBar(j) {
+  // Export bar now only surfaces Zone 1 debug downloads.
+  // Downstream-safe packages are created via the Export tab (Export Gate).
   const bar = document.getElementById("export-bar");
-  const links = document.getElementById("dl-links");
-  if (j.status === "done" && (j.exported_tmx || j.exported_csv || j.reviewed_md)) {
-    bar.style.display = "flex";
-    let html = "";
-    if (j.exported_tmx) html += `<a class="dl-link" href="/api/jobs/${j.id}/download/tmx">↓ TMX</a>`;
-    if (j.exported_csv) html += `<a class="dl-link" href="/api/jobs/${j.id}/download/csv">↓ CSV</a>`;
-    if (j.reviewed_md)  html += `<a class="dl-link" href="/api/jobs/${j.id}/download/md">↓ Markdown</a>`;
-    links.innerHTML = html;
-  } else {
-    bar.style.display = "none";
-  }
+  bar.style.display = "none";  // hidden — use Export tab for all package creation
 }
 
 async function redetect() {
@@ -2010,24 +2013,129 @@ document.getElementById("btn-reopen-normalized").addEventListener("click", async
   }
 })();
 
-// ── Policy Engine UI ─────────────────────────────────────
+// ── Export Gate (Policy Engine UI) ───────────────────────
 let peCurrentJobId = null;
-let peLastPackageId = null;
 
-// Auto-derive provider risk from consumer type
-document.getElementById("pe-consumer")?.addEventListener("change", function() {
-  const map = {
-    internal_clinician:   "trusted_internal",
-    trusted_vendor:       "trusted_vendor",
-    external_translator:  "trusted_vendor",
-    local_llm:            "local_llm",
-    cloud_llm:            "cloud_llm",
-    external_researcher:  "external_researcher",
-    public:               "public",
+// ── Derivation tables ─────────────────────────────────────
+const _PURPOSE_PROFILE = {
+  translation:    "translation",
+  llm_clinical:   "clinical_summary",
+  llm_extraction: "ml_feature_extraction",
+  research:       "research_extract",
+  public_release: "public_release",
+};
+const _PURPOSE_DESC = {
+  translation:    "Stable tokens preserved for post-translation rehydration. Mapping stays Zone 1.",
+  llm_clinical:   "Diagnoses, medications and clinical facts preserved. Direct identifiers removed.",
+  llm_extraction: "Coded diagnoses, measurements, and procedures preserved for ML training.",
+  research:       "Maximum anonymization. Dates relative, locations generalized, no rehydration.",
+  public_release: "Strictest removal. Suitable only for fully de-identified public datasets.",
+};
+const _RECIPIENT_MAP = {
+  internal:            { consumer: "internal_clinician", risk: "trusted_internal" },
+  trusted_vendor:      { consumer: "trusted_vendor",     risk: "trusted_vendor" },
+  local_llm:           { consumer: "local_llm",          risk: "local_llm" },
+  cloud_llm:           { consumer: "cloud_llm",          risk: "cloud_llm" },
+  external_researcher: { consumer: "external_researcher",risk: "external_researcher" },
+  public:              { consumer: "public",             risk: "public" },
+};
+const _RISK_FLOOR = {
+  trusted_internal:    "minimal",
+  trusted_vendor:      "balanced",
+  local_llm:           "balanced",
+  cloud_llm:           "strict",
+  external_researcher: "strict",
+  public:              "maximum",
+};
+const _PROFILE_DEFAULT = {
+  translation:           "balanced",
+  clinical_summary:      "strict",
+  ml_feature_extraction: "strict",
+  research_extract:      "maximum",
+  public_release:        "maximum",
+};
+const _S_ORDER = ["minimal", "balanced", "strict", "maximum"];
+
+function _maxStrict(a, b) {
+  return _S_ORDER[Math.max(_S_ORDER.indexOf(a), _S_ORDER.indexOf(b))];
+}
+function _oneAbove(s) {
+  const i = _S_ORDER.indexOf(s);
+  return _S_ORDER[Math.min(i + 1, _S_ORDER.length - 1)];
+}
+
+function _deriveStrictnessOptions() {
+  const purpose   = document.getElementById("pe-purpose")?.value;
+  const recipient = document.getElementById("pe-recipient")?.value;
+  if (!purpose || !recipient) return null;
+
+  const profile  = _PURPOSE_PROFILE[purpose];
+  const { risk } = _RECIPIENT_MAP[recipient] || {};
+  const floor    = _RISK_FLOOR[risk] || "balanced";
+  const profDef  = _PROFILE_DEFAULT[profile] || "balanced";
+  const recommended = _maxStrict(profDef, floor);
+  const moreReadable = floor === recommended ? null : floor;
+  const morePrivate  = recommended === "maximum" ? null : _oneAbove(recommended);
+
+  return { recommended, moreReadable, morePrivate };
+}
+
+function _updatePrivacySelect() {
+  const sel  = document.getElementById("pe-privacy");
+  const desc = document.getElementById("pe-privacy-desc");
+  const opts = _deriveStrictnessOptions();
+  if (!opts || !sel) return;
+
+  const { recommended, moreReadable, morePrivate } = opts;
+  const label = { minimal:"Minimal", balanced:"Balanced", strict:"Strict", maximum:"Maximum" };
+
+  // Update option disabled states and labels
+  sel.options[0].textContent = `Recommended (${label[recommended]})`;
+  sel.options[0].disabled    = false;
+  sel.options[1].textContent = moreReadable
+    ? `More readable (${label[moreReadable]})`
+    : "More readable — already at lowest safe level";
+  sel.options[1].disabled = !moreReadable;
+  sel.options[2].textContent = morePrivate
+    ? `More private (${label[morePrivate]})`
+    : "More private — already at maximum";
+  sel.options[2].disabled = !morePrivate;
+  sel.options[3].textContent = "Maximum privacy";
+  sel.options[3].disabled    = false;
+
+  // Reset to recommended if current selection is now disabled
+  if (sel.options[sel.selectedIndex].disabled) sel.value = "recommended";
+
+  // Update description
+  const descMap = {
+    recommended:   `${label[recommended]} — provider risk floor applied`,
+    more_readable: moreReadable ? `${label[moreReadable]} — lowest allowed for this recipient` : "",
+    more_private:  morePrivate  ? `${label[morePrivate]} — one step above recommended` : "",
+    maximum:       "Maximum — remove everything possible",
   };
-  const sel = document.getElementById("pe-provider-risk");
-  if (sel) sel.value = map[this.value] || "trusted_vendor";
+  if (desc) desc.textContent = descMap[sel.value] || "";
+}
+
+function _resolveStrictness() {
+  const opts = _deriveStrictnessOptions();
+  if (!opts) return "strict";
+  const sel = document.getElementById("pe-privacy")?.value;
+  const { recommended, moreReadable, morePrivate } = opts;
+  if (sel === "recommended")   return recommended;
+  if (sel === "more_readable") return moreReadable || recommended;
+  if (sel === "more_private")  return morePrivate  || "maximum";
+  return "maximum";
+}
+
+// Wire change handlers
+document.getElementById("pe-purpose")?.addEventListener("change", () => {
+  const desc = document.getElementById("pe-purpose-desc");
+  if (desc) desc.textContent = _PURPOSE_DESC[document.getElementById("pe-purpose").value] || "";
+  _updatePrivacySelect();
 });
+document.getElementById("pe-recipient")?.addEventListener("change", _updatePrivacySelect);
+document.getElementById("pe-privacy")?.addEventListener("change", _updatePrivacySelect);
+
 
 async function loadMappingPane(j) {
   const rows  = document.getElementById("mapping-rows");
@@ -2057,24 +2165,49 @@ async function loadMappingPane(j) {
   }
 }
 
+function peEsc(s) {
+  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
 function initPolicyPane(j) {
   peCurrentJobId = j.id;
-  peLastPackageId = null;
   document.getElementById("pe-empty").style.display = "flex";
   document.getElementById("pe-loading").style.display = "none";
   document.getElementById("pe-results").style.display = "none";
+  document.getElementById("pe-history").style.display = "none";
   document.getElementById("pe-error").style.display = "none";
+
+  // Wire Zone 1 debug download
+  const dlLink = document.getElementById("pe-zone1-dl");
+  if (dlLink && j.reviewed_md) {
+    dlLink.href = `/api/jobs/${j.id}/md`;
+    dlLink.download = j.filename?.replace(/\.pdf$/i, "_reviewed.md") || "reviewed.md";
+  } else if (dlLink) {
+    dlLink.style.opacity = ".4";
+    dlLink.style.pointerEvents = "none";
+  }
+
+  // Seed purpose description
+  const purposeEl = document.getElementById("pe-purpose");
+  if (purposeEl) {
+    const desc = document.getElementById("pe-purpose-desc");
+    if (desc) desc.textContent = _PURPOSE_DESC[purposeEl.value] || "";
+  }
+  _updatePrivacySelect();
+  loadExportHistory(j.id);
 }
 
 document.getElementById("pe-prepare-btn")?.addEventListener("click", runPolicyPrepare);
 
 async function runPolicyPrepare() {
   if (!peCurrentJobId) return;
-  const task        = document.getElementById("pe-task").value;
-  const strictness  = document.getElementById("pe-strictness").value;
-  const consumer    = document.getElementById("pe-consumer").value;
-  const provRisk    = document.getElementById("pe-provider-risk").value;
-  const errEl       = document.getElementById("pe-error");
+
+  const purpose   = document.getElementById("pe-purpose").value;
+  const recipient = document.getElementById("pe-recipient").value;
+  const { consumer, risk } = _RECIPIENT_MAP[recipient] || { consumer: "cloud_llm", risk: "cloud_llm" };
+  const task      = _PURPOSE_PROFILE[purpose];
+  const strictness = _resolveStrictness();
+  const errEl     = document.getElementById("pe-error");
 
   document.getElementById("pe-empty").style.display = "none";
   document.getElementById("pe-results").style.display = "none";
@@ -2087,16 +2220,18 @@ async function runPolicyPrepare() {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
-        job_id: peCurrentJobId,
-        task, strictness_mode: strictness,
-        consumer_type: consumer, provider_risk: provRisk,
+        job_id:          peCurrentJobId,
+        task,
+        strictness_mode: strictness,
+        consumer_type:   consumer,
+        provider_risk:   risk,
       }),
     });
-    peLastPackageId = data.package_id;
     renderPolicyResults(data);
     document.getElementById("pe-results").style.display = "flex";
+    loadExportHistory(peCurrentJobId);
   } catch(e) {
-    errEl.textContent = "Preparation failed: " + e.message;
+    errEl.textContent = "Export preparation failed: " + e.message;
     errEl.style.display = "block";
     document.getElementById("pe-empty").style.display = "flex";
   } finally {
@@ -2105,12 +2240,52 @@ async function runPolicyPrepare() {
   }
 }
 
-function peEsc(s) {
-  return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+async function loadExportHistory(jobId) {
+  const histEl = document.getElementById("pe-history");
+  const listEl = document.getElementById("pe-history-list");
+  if (!histEl || !listEl) return;
+  try {
+    const data = await api(`/api/jobs/${jobId}/packages`);
+    if (!data.packages || data.packages.length === 0) {
+      histEl.style.display = "none";
+      return;
+    }
+    const recBadge = rec => {
+      const cls = { approved:"rec-approved", review_required:"rec-review_required", reject:"rec-reject" }[rec] || "rec-review_required";
+      const lbl = { approved:"Approved", review_required:"Review Required", reject:"Rejected" }[rec] || rec;
+      return `<span class="rec-badge ${cls}" style="font-size:9px;padding:1px 6px">${lbl}</span>`;
+    };
+    const PURPOSE_LABEL = {
+      translation:"Translation", clinical_summary:"LLM Clinical",
+      ml_feature_extraction:"LLM Extraction", research_extract:"Research", public_release:"Public release",
+    };
+    listEl.innerHTML = data.packages.map(pkg => `
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <strong>${escHtml(PURPOSE_LABEL[pkg.profile] || pkg.task)}</strong>
+          <span style="color:var(--muted)">→ ${escHtml(pkg.consumer_type)}</span>
+          <span style="background:var(--border);padding:1px 6px;border-radius:4px;font-size:10px">${escHtml(pkg.strictness)}</span>
+          ${recBadge(pkg.recommended_action)}
+          <span style="margin-left:auto;font-size:11px;color:var(--muted)">${fmtTime(pkg.created_at)}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="color:var(--muted)">Risk: <strong class="${pkg.risk_level==="low"?"risk-low":pkg.risk_level==="medium"?"risk-medium":"risk-high"}">${peEsc(pkg.risk_level||"—").toUpperCase()}</strong></span>
+          <span style="color:var(--muted)">Usefulness: <strong>${pkg.usefulness_score!=null ? (pkg.usefulness_score*100).toFixed(0)+"%" : "—"}</strong></span>
+          <a href="/api/policy/packages/${escHtml(pkg.package_id)}/download" class="btn btn-success btn-sm" style="margin-left:auto" target="_blank">↓ Download</a>
+          <a href="/api/policy/packages/${escHtml(pkg.package_id)}/report" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">Report ↗</a>
+        </div>
+      </div>
+    `).join("");
+    histEl.style.display = "flex";
+    histEl.style.flexDirection = "column";
+  } catch(e) {
+    histEl.style.display = "none";
+  }
 }
 
 function renderPolicyResults(data) {
-  const el = document.getElementById("pe-results");
+  const el  = document.getElementById("pe-results");
+  const pid = data.package_id;
   const rec = data.recommended_action || "unknown";
   const recClass = { approved:"rec-approved", review_required:"rec-review_required", reject:"rec-reject" }[rec] || "rec-review_required";
   const recIcon  = { approved:"✓", review_required:"⚠", reject:"✗" }[rec] || "?";
@@ -2177,8 +2352,8 @@ function renderPolicyResults(data) {
         Profile: <strong style="color:var(--text)">${peEsc(data.profile)}</strong> ·
         Strictness: <strong style="color:var(--text)">${peEsc(data.selected_strictness)}</strong>
       </div>
-      ${peLastPackageId ? `
-      <a href="/api/policy/packages/${peLastPackageId}/download" class="btn btn-success btn-sm" style="margin-left:auto" target="_blank">
+      ${pid ? `
+      <a href="/api/policy/packages/${pid}/download" class="btn btn-success btn-sm" style="margin-left:auto" target="_blank">
         ↓ Download Package ZIP
       </a>` : ""}
     </div>
@@ -2236,7 +2411,7 @@ function renderPolicyResults(data) {
     <div class="pe-card">
       <div class="pe-card-title" style="display:flex;align-items:center;justify-content:space-between">
         Package Preview
-        ${peLastPackageId ? `<a href="/api/policy/packages/${peLastPackageId}/report" target="_blank" style="font-size:10px;color:var(--accent);text-decoration:none">view full report ↗</a>` : ""}
+        ${pid ? `<a href="/api/policy/packages/${pid}/report" target="_blank" style="font-size:10px;color:var(--accent);text-decoration:none">view full report ↗</a>` : ""}
       </div>
       <div class="pe-preview" id="pe-preview-body">Loading…</div>
     </div>
@@ -2249,8 +2424,8 @@ function renderPolicyResults(data) {
   `;
 
   // Load preview.md async
-  if (peLastPackageId) {
-    api(`/api/policy/packages/${peLastPackageId}/report`).then(report => {
+  if (pid) {
+    api(`/api/policy/packages/${pid}/report`).then(report => {
       const previewEl = document.getElementById("pe-preview-body");
       if (previewEl && report.preview_md) {
         try {
