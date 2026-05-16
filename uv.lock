@@ -131,7 +131,7 @@ wheels = [
 [[package]]
 name = "cogtrix-byok"
 version = "0.1.0"
-source = { directory = "../../../prog/PY/tmx-dump/cogtrix_byok" }
+source = { directory = "vendor/cogtrix_byok" }
 dependencies = [
     { name = "openai" },
     { name = "pydantic" },
@@ -183,7 +183,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cogtrix-byok", directory = "../../../prog/PY/tmx-dump/cogtrix_byok" },
+    { name = "cogtrix-byok", directory = "vendor/cogtrix_byok" },
     { name = "cryptography", specifier = ">=43.0.0" },
     { name = "fastapi", specifier = ">=0.136.0" },
     { name = "openai", specifier = ">=1.0.0" },
