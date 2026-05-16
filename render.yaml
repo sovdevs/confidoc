@@ -16,7 +16,13 @@ services:
         value: 0.0.0.0
       - key: PORT
         value: 8100
-      - key: GEMINI_MODEL
+      - key: CONFIDOC_PDF_PROVIDER
+        value: google
+      - key: CONFIDOC_PDF_MODEL
+        value: gemini-2.0-flash
+      - key: CONFIDOC_ANON_PROVIDER
+        value: google
+      - key: CONFIDOC_ANON_MODEL
         value: gemini-2.0-flash
       - key: MAX_CONCURRENT_PDFS
         value: "2"
@@ -27,7 +33,7 @@ services:
       - key: CONFIDOC_DEMO_CAPTURE
         value: "true"          # enables Demo tab + pre-loaded demo documents
       - key: CONFIDOC_DEMO_API_KEY
-        sync: false            # set manually in Render dashboard — used for demo document processing
+        sync: false            # set manually in Render dashboard — must be a Google API key
     disk:
       name: confidoc-data
       mountPath: /data
