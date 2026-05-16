@@ -613,6 +613,7 @@ class PolicyPrepareBody(_BM):
     strictness_mode: str = "max_allowable"
     consumer_type: str = "trusted_vendor"
     provider_risk: str = "trusted_vendor"
+    tgt_lang: str = ""   # required for translation task (TMX generation)
 
 
 def _safe_policy_response(pkg) -> dict:
@@ -703,15 +704,30 @@ def policy_prepare(body: PolicyPrepareBody):
         target_language=job.tgt_lang,
     )
 
+    if body.task == "translation" and not body.tgt_lang:
+        raise HTTPException(400, "Target language (tgt_lang) is required for translation packages")
+
     try:
         pkg = pe_prepare(request, save=True)
     except Exception as e:
         raise HTTPException(500, f"Policy engine error: {e}")
 
+    # For translation packages, also generate a TMX from the prepared segments
+    if body.task == "translation" and body.tgt_lang:
+        from app.policy_engine.package import _packages_dir
+        from pdf_to_markdown.exporter import md_to_segments, write_tmx
+        pkg_dir = _packages_dir() / pkg.package_id
+        prepared_path = pkg_dir / "prepared.md"
+        if prepared_path.exists():
+            segments = md_to_segments(prepared_path.read_text(encoding="utf-8"))
+            tmx_path = pkg_dir / f"{Path(job.filename).stem}.tmx"
+            write_tmx(segments, job.src_lang, body.tgt_lang, tmx_path)
+
     audit_log.log(job.id, "POLICY_PACKAGE_CREATED_VIA_UI", {
         "package_id": pkg.package_id,
         "task": body.task,
         "strictness": pkg.selected_strictness,
+        "tgt_lang": body.tgt_lang or None,
     })
 
     return _safe_policy_response(pkg)

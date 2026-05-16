@@ -799,6 +799,21 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               <div id="pe-privacy-desc" style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5"></div>
             </div>
 
+            <!-- Target language — shown only for Translation package -->
+            <div class="form-group" id="pe-tgt-lang-row" style="display:none">
+              <label>Target language <span style="color:var(--danger)">*</span></label>
+              <input id="pe-tgt-lang" list="pe-tgt-lang-list" autocomplete="off"
+                     placeholder="e.g. en-US, en-GB, fr-FR"
+                     style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;outline:none;width:100%">
+              <datalist id="pe-tgt-lang-list">
+                <option value="en-US"><option value="en-GB"><option value="fr-FR">
+                <option value="fr-BE"><option value="de-DE"><option value="es-ES">
+                <option value="it-IT"><option value="nl-NL"><option value="pt-PT">
+                <option value="pl-PL"><option value="ja-JP"><option value="zh-CN">
+              </datalist>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Required for TMX generation</div>
+            </div>
+
             <button class="btn btn-primary btn-block" id="pe-prepare-btn" style="margin-top:4px">
               Prepare Export Package
             </button>
@@ -872,55 +887,6 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
 <div class="toast" id="toast"></div>
 
-<!-- ── Export options modal ───────────────────────────────── -->
-<div id="export-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.75);align-items:center;justify-content:center">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:360px;display:flex;flex-direction:column;gap:16px;box-shadow:0 8px 40px rgba(0,0,0,.6)">
-    <div style="font-size:15px;font-weight:600">Export</div>
-    <div style="font-size:12px;color:var(--muted)">
-      Source: <strong id="export-src-display" style="color:var(--text)"></strong>
-    </div>
-
-    <!-- Format checkboxes -->
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
-        <input type="checkbox" id="export-fmt-tmx" checked style="margin-top:2px;accent-color:var(--accent)">
-        <div>
-          <div style="font-size:13px;font-weight:500">TMX — Translation Memory</div>
-          <div style="font-size:11px;color:var(--muted)">Bilingual format · requires target language</div>
-        </div>
-      </label>
-
-      <!-- Target language — only shown when TMX checked -->
-      <div id="export-tgt-row" style="margin-left:22px;display:flex;flex-direction:column;gap:4px">
-        <label style="font-size:11px;color:var(--muted)">Target language (BCP 47)</label>
-        <input id="export-tgt-input" list="export-tgt-list" autocomplete="off"
-               placeholder="e.g. en-US, en-GB, fr-FR"
-               style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12px;outline:none;width:100%">
-        <datalist id="export-tgt-list">
-          <option value="en-US"><option value="en-GB"><option value="fr-FR">
-          <option value="fr-BE"><option value="de-DE"><option value="de-AT">
-          <option value="de-CH"><option value="es-ES"><option value="it-IT">
-          <option value="nl-NL"><option value="pt-PT"><option value="pt-BR">
-          <option value="pl-PL"><option value="ru-RU"><option value="ja-JP">
-          <option value="zh-CN"><option value="zh-TW">
-        </datalist>
-      </div>
-
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
-        <input type="checkbox" id="export-fmt-csv" checked style="margin-top:2px;accent-color:var(--accent)">
-        <div>
-          <div style="font-size:13px;font-weight:500">CSV — Source segments</div>
-          <div style="font-size:11px;color:var(--muted)">Source language only · no target needed</div>
-        </div>
-      </label>
-    </div>
-
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn btn-ghost btn-sm" id="export-modal-cancel">Cancel</button>
-      <button class="btn btn-primary btn-sm" id="export-modal-confirm">Export</button>
-    </div>
-  </div>
-</div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
@@ -1221,7 +1187,6 @@ function renderActions(j) {
       <button class="btn btn-ghost btn-sm" id="btn-redetect" title="Re-run with improved patterns">↺ Re-detect</button>
       <button class="btn btn-ghost btn-sm" id="btn-approve-all">Approve All</button>
       ${j.reviewed_md ? `<button class="btn btn-ghost btn-sm" id="btn-normalize">OCR Check</button>` : ""}
-      <button class="btn btn-primary btn-sm" id="btn-go-export">Export →</button>
     `;
   } else if (j.status === "normalizing") {
     html = `<span style="font-size:12px;color:var(--warning)">OCR Check in progress</span>`;
@@ -1229,7 +1194,6 @@ function renderActions(j) {
     html = `
       <span style="font-size:12px;color:var(--success)">✓ Normalized</span>
       <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr">↩ Edit OCR Check</button>
-      <button class="btn btn-primary btn-sm" id="btn-go-export">Export →</button>
     `;
   } else if (j.status === "exporting") {
     html = `<span class="proc-badge"><span class="spinner"></span>Exporting…</span>`;
@@ -1242,7 +1206,6 @@ function renderActions(j) {
       <button class="btn btn-ghost btn-sm" id="btn-approve-all">Approve All</button>
       <button class="btn btn-ghost btn-sm" id="btn-redetect">↺ Re-detect</button>
       <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr">↩ Edit OCR Check</button>
-      <button class="btn btn-primary btn-sm" id="btn-go-export">Export →</button>
     `;
   } else if (j.status === "failed") {
     html = `<span style="font-size:12px;color:var(--danger)">✗ Failed</span>`;
@@ -1254,9 +1217,6 @@ function renderActions(j) {
   el.querySelector("#btn-approve-all")?.addEventListener("click", approveAll);
   el.querySelector("#btn-normalize")?.addEventListener("click", () => {
     viewMode = "ocr"; renderDetail();
-  });
-  el.querySelector("#btn-go-export")?.addEventListener("click", () => {
-    viewMode = "policy"; renderDetail();
   });
   el.querySelector("#btn-reopen-ocr")?.addEventListener("click", async () => {
     try {
@@ -1449,67 +1409,6 @@ async function approveAll() {
   } catch(e) { showToast(e.message, "error"); }
 }
 
-// ── Export options modal ──────────────────────────────────
-const _exportModal = document.getElementById("export-modal");
-
-function triggerExport() {
-  document.getElementById("export-src-display").textContent = currentJob.src_lang || "unknown";
-  document.getElementById("export-tgt-input").value = currentJob.tgt_lang || "";
-  _syncTmxRow();
-  _exportModal.style.display = "flex";
-}
-
-function _syncTmxRow() {
-  const tmx = document.getElementById("export-fmt-tmx").checked;
-  const row  = document.getElementById("export-tgt-row");
-  row.style.display = tmx ? "flex" : "none";
-  if (tmx) document.getElementById("export-tgt-input").focus();
-}
-
-document.getElementById("export-fmt-tmx").addEventListener("change", _syncTmxRow);
-
-async function _doExport() {
-  const wantTmx = document.getElementById("export-fmt-tmx").checked;
-  const wantCsv = document.getElementById("export-fmt-csv").checked;
-  const tgtLang = document.getElementById("export-tgt-input").value.trim();
-
-  if (!wantTmx && !wantCsv) {
-    showToast("Select at least one export format", "error"); return;
-  }
-  if (wantTmx && !tgtLang) {
-    showToast("Enter a target language for TMX", "error");
-    document.getElementById("export-tgt-input").focus(); return;
-  }
-  _exportModal.style.display = "none";
-
-  const fd = new FormData();
-  fd.append("reviewer",   "human");
-  fd.append("export_tmx", wantTmx ? "true" : "false");
-  fd.append("export_csv", wantCsv ? "true" : "false");
-  if (tgtLang) fd.append("tgt_lang", tgtLang);
-
-  try {
-    currentJob = await api(`/api/jobs/${currentJob.id}/export`, {method:"POST", body:fd});
-    renderDetail();
-    renderJobList();
-    const fmts = [wantTmx && `TMX (${tgtLang})`, wantCsv && "CSV"].filter(Boolean).join(" + ");
-    const approved = currentJob.entities.filter(e=>e.approved).length;
-    const manual   = currentJob.entities.filter(e=>e.approved && e.manual).length;
-    showToast(`Exported ${fmts} — ${approved} terms logged${manual ? ` (${manual} manual)` : ""}`);
-  } catch(e) { showToast(e.message, "error"); }
-}
-
-document.getElementById("export-modal-confirm").addEventListener("click", _doExport);
-document.getElementById("export-modal-cancel").addEventListener("click", () => {
-  _exportModal.style.display = "none";
-});
-document.getElementById("export-tgt-input").addEventListener("keydown", e => {
-  if (e.key === "Enter")  _doExport();
-  if (e.key === "Escape") _exportModal.style.display = "none";
-});
-_exportModal.addEventListener("click", e => {
-  if (e.target === _exportModal) _exportModal.style.display = "none";
-});
 
 // ── Text selection → entity picker ───────────────────────
 const picker      = document.getElementById("entity-picker");
@@ -2127,11 +2026,18 @@ function _resolveStrictness() {
   return "maximum";
 }
 
+function _updateTgtLangRow() {
+  const purpose = document.getElementById("pe-purpose")?.value;
+  const row = document.getElementById("pe-tgt-lang-row");
+  if (row) row.style.display = purpose === "translation" ? "flex" : "none";
+}
+
 // Wire change handlers
 document.getElementById("pe-purpose")?.addEventListener("change", () => {
   const desc = document.getElementById("pe-purpose-desc");
   if (desc) desc.textContent = _PURPOSE_DESC[document.getElementById("pe-purpose").value] || "";
   _updatePrivacySelect();
+  _updateTgtLangRow();
 });
 document.getElementById("pe-recipient")?.addEventListener("change", _updatePrivacySelect);
 document.getElementById("pe-privacy")?.addEventListener("change", _updatePrivacySelect);
@@ -2194,6 +2100,7 @@ function initPolicyPane(j) {
     if (desc) desc.textContent = _PURPOSE_DESC[purposeEl.value] || "";
   }
   _updatePrivacySelect();
+  _updateTgtLangRow();
   loadExportHistory(j.id);
 }
 
@@ -2207,7 +2114,15 @@ async function runPolicyPrepare() {
   const { consumer, risk } = _RECIPIENT_MAP[recipient] || { consumer: "cloud_llm", risk: "cloud_llm" };
   const task      = _PURPOSE_PROFILE[purpose];
   const strictness = _resolveStrictness();
+  const tgtLang   = document.getElementById("pe-tgt-lang")?.value.trim() || "";
   const errEl     = document.getElementById("pe-error");
+
+  if (purpose === "translation" && !tgtLang) {
+    errEl.textContent = "Target language is required for Translation packages (e.g. en-US, fr-FR)";
+    errEl.style.display = "block";
+    document.getElementById("pe-tgt-lang")?.focus();
+    return;
+  }
 
   document.getElementById("pe-empty").style.display = "none";
   document.getElementById("pe-results").style.display = "none";
@@ -2225,6 +2140,7 @@ async function runPolicyPrepare() {
         strictness_mode: strictness,
         consumer_type:   consumer,
         provider_risk:   risk,
+        tgt_lang:        tgtLang,
       }),
     });
     renderPolicyResults(data);
