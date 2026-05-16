@@ -1,0 +1,157 @@
+{
+  "total_entities_processed": 16,
+  "by_action": {
+    "remove": 3,
+    "relative_date": 8,
+    "generalize": 2,
+    "stable_token": 1,
+    "flag_for_review": 2
+  },
+  "flagged_for_review": 0,
+  "entries": [
+    {
+      "entity_id": "c6066a21",
+      "label": "PHYSICIAN_NAME",
+      "action_applied": "remove",
+      "output": "[REMOVED_PHYSICIAN_NAME]",
+      "strictness": "strict",
+      "description": "Removed from prepared document",
+      "warning": null
+    },
+    {
+      "entity_id": "9b243cf6",
+      "label": "DATE",
+      "action_applied": "relative_date",
+      "output": "[DATE_002]",
+      "strictness": "strict",
+      "description": "Date replaced with relative chronology marker",
+      "warning": null
+    },
+    {
+      "entity_id": "dd2dcecc",
+      "label": "DATE",
+      "action_applied": "relative_date",
+      "output": "[DATE_004]",
+      "strictness": "strict",
+      "description": "Date replaced with relative chronology marker",
+      "warning": null
+    },
+    {
+      "entity_id": "a91fce52",
+      "label": "DATE",
+      "action_applied": "relative_date",
+      "output": "[DATE_006]",
+      "strictness": "strict",
+      "description": "Date replaced with relative chronology marker",
+      "warning": null
+    },
+    {
+      "entity_id": "33c2aa2b",
+      "label": "DATE",
+      "action_applied": "relative_date",
+      "output": "[DATE_008]",
+      "strictness": "strict",
+      "description": "Date replaced with relative chronology marker",
+      "warning": null
+    },
+    {
+      "entity_id": "4487d60d",
+      "label": "DATE",
+      "action_applied": "relative_date",
+      "output": "[DATE_010]",
+      "strictness": "strict",
+      "description": "Date replaced with relative chronology marker",
+      "warning": null
+    },
+    {
+      "entity_id": "5bf6c948",
+      "label": "ADDRESS",
+      "action_applied": "remove",
+      "output": "[REMOVED_ADDRESS]",
+      "strictness": "strict",
+      "description": "Removed from prepared document",
+      "warning": null
+    },
+    {
+      "entity_id": "fc4c4fbd",
+      "label": "LOCATION",
+      "action_applied": "generalize",
+      "output": "[REGION]",
+      "strictness": "strict",
+      "description": "Location generalized to region/country",
+      "warning": null
+    },
+    {
+      "entity_id": "aa60da6a",
+      "label": "DATE",
+      "action_applied": "relative_date",
+      "output": "[DATE_012]",
+      "strictness": "strict",
+      "description": "Date replaced with relative chronology marker",
+      "warning": null
+    },
+    {
+      "entity_id": "f651b509",
+      "label": "PATIENT_NAME",
+      "action_applied": "stable_token",
+      "output": "[PATIENT_001]",
+      "strictness": "strict",
+      "description": "Replaced with numbered stable placeholder",
+      "warning": null
+    },
+    {
+      "entity_id": "04c7efd3",
+      "label": "DATE",
+      "action_applied": "relative_date",
+      "output": "[DATE_014]",
+      "strictness": "strict",
+      "description": "Date replaced with relative chronology marker",
+      "warning": null
+    },
+    {
+      "entity_id": "a5b3d9c5",
+      "label": "LOCATION",
+      "action_applied": "generalize",
+      "output": "[REGION]",
+      "strictness": "strict",
+      "description": "Location generalized to region/country",
+      "warning": null
+    },
+    {
+      "entity_id": "e2576469",
+      "label": "ADDRESS",
+      "action_applied": "remove",
+      "output": "[REMOVED_ADDRESS]",
+      "strictness": "strict",
+      "description": "Removed from prepared document",
+      "warning": null
+    },
+    {
+      "entity_id": "9fc96e41",
+      "label": "ORGANIZATION",
+      "action_applied": "flag_for_review",
+      "output": "MediCore International Health Services",
+      "strictness": "strict",
+      "description": "Preserved with reidentification risk flag",
+      "warning": null
+    },
+    {
+      "entity_id": "1e688a7e",
+      "label": "ORGANIZATION",
+      "action_applied": "flag_for_review",
+      "output": "MediCore International Health Services",
+      "strictness": "strict",
+      "description": "Preserved with reidentification risk flag",
+      "warning": null
+    },
+    {
+      "entity_id": "eaa63843",
+      "label": "DATE",
+      "action_applied": "relative_date",
+      "output": "[DATE_016]",
+      "strictness": "strict",
+      "description": "Date replaced with relative chronology marker",
+      "warning": null
+    }
+  ]
+}

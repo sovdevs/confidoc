@@ -1,0 +1,61 @@
+{
+  "task": "clinical_summary",
+  "profile": "clinical_summary",
+  "strictness": "strict",
+  "score": 1.0,
+  "threshold": 0.9,
+  "passes": true,
+  "status": "PASS ✓",
+  "weighted_checks": {
+    "enough_text_remaining": {
+      "pass": true,
+      "weight": 0.0,
+      "contribution": 0.0,
+      "description": "Sufficient text remains for the task"
+    },
+    "placeholders_stable": {
+      "pass": true,
+      "weight": 0.0,
+      "contribution": 0.0,
+      "description": "All tokens follow stable numbered format"
+    },
+    "diagnoses_preserved": {
+      "pass": true,
+      "weight": 0.25,
+      "contribution": 0.25,
+      "description": "Medical diagnoses remain in document"
+    },
+    "measurements_preserved": {
+      "pass": true,
+      "weight": 0.2,
+      "contribution": 0.2,
+      "description": "Clinical measurements (values + units) remain"
+    },
+    "chronology_preserved": {
+      "pass": true,
+      "weight": 0.2,
+      "contribution": 0.2,
+      "description": "Date or time markers remain for chronology"
+    },
+    "treatment_plan_preserved": {
+      "pass": true,
+      "weight": 0.15,
+      "contribution": 0.15,
+      "description": "Treatment plan / follow-up context remains"
+    },
+    "medications_preserved": {
+      "pass": true,
+      "weight": 0.1,
+      "contribution": 0.1,
+      "description": "Medication names remain in document"
+    },
+    "section_structure_preserved": {
+      "pass": true,
+      "weight": 0.1,
+      "contribution": 0.1,
+      "description": "Document headings/sections largely intact"
+    }
+  },
+  "notes": [],
+  "summary": "8/8 checks passed. Score 1.00 ≥ threshold 0.90. Status: PASS ✓."
+}

@@ -1,0 +1,12 @@
+{
+  "captured_at": "2026-05-16T13:01:20.592197+00:00",
+  "package_id": "a4294f67426c",
+  "task": "clinical_summary",
+  "consumer_type": "cloud_llm",
+  "provider_risk": "cloud_llm",
+  "strictness_mode": "strict",
+  "tgt_lang": null,
+  "profile": "clinical_summary",
+  "selected_strictness": "strict",
+  "recommended_action": "review_required"
+}

@@ -1,0 +1,43 @@
+{
+  "package_id": "a4294f67426c",
+  "job_id": "5b992fd488e64c3ca5b75996dd2e7160",
+  "task": "clinical_summary",
+  "profile": "clinical_summary",
+  "strictness": "strict",
+  "consumer_type": "cloud_llm",
+  "provider_risk": "cloud_llm",
+  "prepared_at": "2026-05-16T13:01:20.467602+00:00",
+  "direct_identifiers_removed": 3,
+  "entities_tokenized": 1,
+  "entities_generalized": 10,
+  "total_entities_processed": 16,
+  "clinical_facts_preserved_score": 1.0,
+  "usefulness_passes": true,
+  "risk_score": "medium",
+  "recommended_action": "review_required",
+  "actions_summary": {
+    "remove": 3,
+    "relative_date": 8,
+    "generalize": 2,
+    "stable_token": 1,
+    "flag_for_review": 2
+  },
+  "warnings": [],
+  "files": {
+    "prepared.md": {
+      "sha256": "7ed0953577d8692fea95eb71a0fb51ae176d25c44b4685134a69883ff9779fd3"
+    },
+    "risk_report.json": {
+      "sha256": "347944b64357f27e0b669579ee94d2e7c4aba4e221ffcd70615dc76d19df1b99"
+    },
+    "usefulness_report.json": {
+      "sha256": "f45add4600e9dee287a153533760f9190fed0b9b9b3cef716e1a67997674cfeb"
+    },
+    "transformation_log.json": {
+      "sha256": "fa2f482ab41bc002452cb3816224d875813cd8c335166b9c5ab0109d2f4c22f8"
+    },
+    "preview.md": {
+      "sha256": "7c0e91719b86f2984cb380c2bc39f8d5c388b009b533b83d426a8ce44896b31b"
+    }
+  }
+}

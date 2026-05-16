@@ -1,0 +1,61 @@
+{
+  "risk_score": "medium",
+  "direct_identifier_risk": "medium",
+  "quasi_identifier_risk": "low",
+  "checks": {
+    "no_full_names": {
+      "pass": false,
+      "category": "direct_identifier",
+      "description": "No full name patterns (First Last) detected"
+    },
+    "no_addresses": {
+      "pass": true,
+      "category": "direct_identifier",
+      "description": "No street address patterns detected"
+    },
+    "no_emails": {
+      "pass": true,
+      "category": "direct_identifier",
+      "description": "No email addresses detected"
+    },
+    "no_phone_numbers": {
+      "pass": true,
+      "category": "direct_identifier",
+      "description": "No phone number patterns detected"
+    },
+    "no_insurance_ids": {
+      "pass": true,
+      "category": "direct_identifier",
+      "description": "No insurance/ID number patterns detected"
+    },
+    "no_exact_dob": {
+      "pass": true,
+      "category": "direct_identifier",
+      "description": "No exact date of birth detected"
+    },
+    "no_postal_codes": {
+      "pass": true,
+      "category": "quasi_identifier",
+      "description": "No German postal codes detected"
+    },
+    "rare_condition_clear": {
+      "pass": true,
+      "category": "quasi_identifier",
+      "description": "No rare/identifying condition terms detected"
+    },
+    "few_precise_dates": {
+      "pass": true,
+      "category": "quasi_identifier",
+      "description": "Three or fewer precise calendar dates remain"
+    },
+    "no_flagged_entities": {
+      "pass": true,
+      "category": "quasi_identifier",
+      "description": "No entities flagged for reidentification risk"
+    }
+  },
+  "warnings": [
+    "Full names may still be present in prepared document"
+  ],
+  "summary": "5/6 direct identifier checks passed, 4/4 quasi-identifier checks passed. Overall risk: medium."
+}

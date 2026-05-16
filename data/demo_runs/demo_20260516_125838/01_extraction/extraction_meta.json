@@ -1,0 +1,10 @@
+{
+  "captured_at": "2026-05-16T12:58:46.798136+00:00",
+  "job_id": "5b992fd488e64c3ca5b75996dd2e7160",
+  "filename": "gynecologyreport_de.pdf",
+  "src_lang": "de-DE",
+  "tgt_lang": "en-GB",
+  "status": "JobStatus.reviewing",
+  "error": null,
+  "input_sha256": "2b9774c5f07ee876be782abef09cec418837384ed3ec86621794455954f96c9f"
+}
