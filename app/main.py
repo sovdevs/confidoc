@@ -32,6 +32,7 @@ def config():
         "pdf_model":    settings.pdf_model,
         "anon_provider": settings.anon_provider,
         "anon_model":    settings.anon_model,
+        "byok_only":    settings.byok_only,
     }
 
 

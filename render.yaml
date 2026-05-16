@@ -22,6 +22,8 @@ services:
         value: "2"
       - key: MAX_CONCURRENT_PAGES
         value: "4"
+      - key: CONFIDOC_BYOK_ONLY
+        value: "true"          # users must supply their own API key — server key not used
     disk:
       name: confidoc-data
       mountPath: /data

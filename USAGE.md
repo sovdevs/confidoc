@@ -241,3 +241,52 @@ MAPPING_KEY=<generated fernet key>
 CONFIDOC_REDZONE_REMINDER_MINUTES=10   # session reminder interval
 CONFIDOC_SESSION_TIMEOUT_HOURS=8       # login session duration (auth coming)
 ```
+
+---
+
+## Privacy & Git Safety
+
+Confidoc handles confidential medical documents. The following rules are enforced via `.gitignore` and must never be bypassed.
+
+### What is NEVER committed to git
+
+| Artifact | Rule |
+|---|---|
+| PDFs (any location) | `*.pdf` / `*.PDF` — global |
+| PDF page renders (PNGs in `data/zone1/`) | `data/zone1/*` |
+| Raw extracted markdown | `data/extracted/*` |
+| Encrypted token mappings | `data/mappings/*` |
+| Mapping encryption key | `*.key` |
+| API keys and secrets | `.env` / `.env.*` |
+| Approved terms log (contains entity text) | `data/approved_terms.jsonl` |
+| Audit log | `data/audit.jsonl` |
+| LLM report outputs | `data/zone2/*` |
+
+### What IS safe to commit
+
+| Artifact | Why |
+|---|---|
+| `data/reviewed/*.md` | Pseudonymized — tokens only, no real PII |
+| `data/exported/*.tmx` / `*.csv` | Same — pseudonymized segments |
+| `.gitkeep` placeholder files | Empty, structural only |
+| Source code, config templates | No runtime data |
+
+Note: `data/reviewed/` and `data/exported/` are also excluded from git by default. They live on the Render persistent disk. Only share pseudonymized outputs explicitly and deliberately.
+
+### Before every commit
+
+```bash
+git status           # check nothing unexpected is staged
+git diff --cached    # review what is about to be committed
+```
+
+Never use `git add -A` or `git add .` in this repository without checking `git status` first.
+
+### If a PDF or secret is accidentally staged
+
+```bash
+git reset HEAD <file>          # unstage before committing
+git rm --cached <file>         # if already committed — remove from tracking
+```
+
+Then rotate any exposed API keys immediately.

@@ -32,6 +32,12 @@ class Settings:
     anon_api_key: str  = os.getenv("CONFIDOC_ANON_API_KEY",  os.getenv("OPENROUTER_API_KEY", os.getenv("GOOGLE_API_KEY", "")))
     anon_base_url: str = os.getenv("CONFIDOC_ANON_BASE_URL", "")
 
+    # ── BYOK-only mode ────────────────────────────────────────────────────────
+    # When True, requests without a user-supplied API key are rejected.
+    # Set CONFIDOC_BYOK_ONLY=true on public/shared deployments so the server
+    # key is never used — each user must bring their own.
+    byok_only: bool = os.getenv("CONFIDOC_BYOK_ONLY", "false").lower() == "true"
+
     # ── Concurrency ───────────────────────────────────────────────────────────
     max_concurrent_pdfs: int  = int(os.getenv("MAX_CONCURRENT_PDFS",  "3"))
     max_concurrent_pages: int = int(os.getenv("MAX_CONCURRENT_PAGES", "5"))

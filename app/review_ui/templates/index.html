@@ -718,7 +718,9 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           <button class="btn btn-ghost btn-sm" id="btn-auto-fix">⚡ Auto-fix unambiguous</button>
           <button class="btn btn-ghost btn-sm" id="btn-save-draft">Save draft</button>
           <span id="ocr-save-status" style="font-size:12px;color:var(--muted)"></span>
-          <button class="btn btn-primary btn-sm" id="btn-approve-normalized" style="margin-left:auto">✓ Approve normalized</button>
+          <button class="btn btn-ghost btn-sm" id="btn-back-entities" style="margin-left:auto" title="Switch to Entities tab to add/edit PII">← Entities</button>
+          <button class="btn btn-ghost btn-sm" id="btn-reopen-normalized" title="Reopen for editing">↩ Reopen</button>
+          <button class="btn btn-primary btn-sm" id="btn-approve-normalized">✓ Approve</button>
         </div>
       </div>
 
@@ -850,6 +852,36 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ── Export language modal ──────────────────────────────── -->
+<div id="export-lang-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.75);align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:340px;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 40px rgba(0,0,0,.6)">
+    <div style="font-size:15px;font-weight:600">Export — Target Language</div>
+    <div style="font-size:12px;color:var(--muted)">
+      Source: <strong id="export-src-display" style="color:var(--text)"></strong><br>
+      TMX requires a target language. CSV exports source only.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <label style="font-size:12px;color:var(--muted)">Target language (BCP 47)</label>
+      <input id="export-tgt-input" list="export-tgt-list"
+             autocomplete="off"
+             placeholder="e.g. en-US, en-GB, fr-FR, es-ES"
+             style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:13px;outline:none;width:100%">
+      <datalist id="export-tgt-list">
+        <option value="en-US"><option value="en-GB"><option value="fr-FR">
+        <option value="fr-BE"><option value="de-DE"><option value="de-AT">
+        <option value="de-CH"><option value="es-ES"><option value="it-IT">
+        <option value="nl-NL"><option value="pt-PT"><option value="pt-BR">
+        <option value="pl-PL"><option value="ru-RU"><option value="ja-JP">
+        <option value="zh-CN"><option value="zh-TW">
+      </datalist>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" id="export-lang-cancel">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="export-lang-confirm">Export</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
@@ -1139,10 +1171,13 @@ function renderActions(j) {
       <button class="btn btn-primary btn-sm" id="btn-export">Export</button>
     `;
   } else if (j.status === "normalizing") {
-    html = `<button class="btn btn-ghost btn-sm" id="btn-export">Export</button>`;
+    html = `
+      <button class="btn btn-ghost btn-sm" id="btn-export">Export</button>
+    `;
   } else if (j.status === "normalized") {
     html = `
       <span style="font-size:12px;color:var(--success)">✓ Normalized</span>
+      <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr">↩ Edit OCR Check</button>
       <button class="btn btn-primary btn-sm" id="btn-export">Export</button>
     `;
   } else if (j.status === "exporting") {
@@ -1154,7 +1189,8 @@ function renderActions(j) {
       <span style="font-size:12px;color:var(--success)">✓ Complete</span>
       <span style="font-size:12px;color:var(--muted)">${approved}/${total} approved</span>
       <button class="btn btn-ghost btn-sm" id="btn-approve-all">Approve All</button>
-      <button class="btn btn-ghost btn-sm" id="btn-redetect" title="Re-run detection">↺ Re-detect</button>
+      <button class="btn btn-ghost btn-sm" id="btn-redetect">↺ Re-detect</button>
+      <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr">↩ Edit OCR Check</button>
       <button class="btn btn-primary btn-sm" id="btn-export">↺ Re-export</button>
     `;
   } else if (j.status === "failed") {
@@ -1168,6 +1204,15 @@ function renderActions(j) {
   el.querySelector("#btn-export")?.addEventListener("click", triggerExport);
   el.querySelector("#btn-normalize")?.addEventListener("click", () => {
     viewMode = "ocr"; renderDetail();
+  });
+  el.querySelector("#btn-reopen-ocr")?.addEventListener("click", async () => {
+    try {
+      currentJob = await api(`/api/jobs/${currentJob.id}/normalize/reopen`, {method:"POST"});
+      viewMode = "ocr";
+      renderDetail();
+      renderJobList();
+      showToast("OCR Check reopened — continue editing");
+    } catch(e) { showToast(e.message, "error"); }
   });
 }
 
@@ -1184,8 +1229,8 @@ function renderEntities(j) {
 
   const manualCount = j.entities.filter(e => e.manual).length;
   count.textContent = j.entities.length + (manualCount ? ` (${manualCount} manual)` : "");
-  // Zone 1: entity actions always available (re-edit even after done)
-  const reviewing = ["reviewing", "approved", "normalized", "done"].includes(j.status);
+  // Zone 1: entity actions always available at any active stage
+  const reviewing = ["reviewing", "approved", "normalizing", "normalized", "done"].includes(j.status);
 
   el.innerHTML = j.entities.map((e,i) => {
     const state = e.approved ? "approved" : (e.dismissed ? "dismissed" : "pending");
@@ -1359,31 +1404,44 @@ async function approveAll() {
   } catch(e) { showToast(e.message, "error"); }
 }
 
-async function triggerExport() {
-  // Prompt for TMX target language before exporting
-  const currentTgt = currentJob.tgt_lang || "";
-  const tgtLang = window.prompt(
-    "Target language for TMX export\n(BCP 47 format, e.g. en-US, en-GB, fr-FR, es-ES)\nLeave blank to keep current: " + (currentTgt || "not set"),
-    currentTgt
-  );
-  if (tgtLang === null) return; // cancelled
-  if (!tgtLang.trim()) {
-    showToast("Target language required for TMX export", "error");
-    return;
-  }
+function triggerExport() {
+  const modal  = document.getElementById("export-lang-modal");
+  const input  = document.getElementById("export-tgt-input");
+  const srcLbl = document.getElementById("export-src-display");
+  srcLbl.textContent = currentJob.src_lang || "unknown";
+  input.value = currentJob.tgt_lang || "";
+  modal.style.display = "flex";
+  input.focus();
+  input.select();
+}
+
+async function _doExport() {
+  const modal  = document.getElementById("export-lang-modal");
+  const tgtLang = document.getElementById("export-tgt-input").value.trim();
+  if (!tgtLang) { showToast("Enter a target language first", "error"); return; }
+  modal.style.display = "none";
 
   const fd = new FormData();
   fd.append("reviewer", "human");
-  fd.append("tgt_lang", tgtLang.trim());
+  fd.append("tgt_lang", tgtLang);
   try {
     currentJob = await api(`/api/jobs/${currentJob.id}/export`, {method:"POST", body:fd});
     renderDetail();
     renderJobList();
     const approved = currentJob.entities.filter(e=>e.approved).length;
     const manual   = currentJob.entities.filter(e=>e.approved && e.manual).length;
-    showToast(`Export complete (${tgtLang.trim()}) — ${approved} terms logged${manual ? ` (${manual} manual)` : ""}`);
+    showToast(`Export complete (${tgtLang}) — ${approved} terms logged${manual ? ` (${manual} manual)` : ""}`);
   } catch(e) { showToast(e.message, "error"); }
 }
+
+document.getElementById("export-lang-confirm").addEventListener("click", _doExport);
+document.getElementById("export-lang-cancel").addEventListener("click", () => {
+  document.getElementById("export-lang-modal").style.display = "none";
+});
+document.getElementById("export-tgt-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") _doExport();
+  if (e.key === "Escape") document.getElementById("export-lang-modal").style.display = "none";
+});
 
 // ── Text selection → entity picker ───────────────────────
 const picker      = document.getElementById("entity-picker");
@@ -1423,7 +1481,7 @@ function getTextOffset(container, targetNode, targetOffset) {
 
 document.getElementById("text-preview").addEventListener("mouseup", (evt) => {
   if (!currentJob || !rawText) return;
-  if (!["reviewing","approved"].includes(currentJob.status)) return;
+  if (!["reviewing","approved","normalizing","normalized","done"].includes(currentJob.status)) return;
 
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hidePicker(); return; }
@@ -1600,9 +1658,13 @@ async function loadModelInfo() {
     _defaultPdfProvider = cfg.pdf_provider;
     _defaultPdfModel    = cfg.pdf_model;
     const el = document.getElementById("ocr-model-current");
-    if (el) el.textContent = `Server default: ${cfg.pdf_model} via ${cfg.pdf_provider}`;
+    if (cfg.byok_only) {
+      if (el) el.innerHTML = `<span style="color:var(--warning);font-weight:600">⚠ BYOK mode — you must enter your own API key to process documents</span>`;
+    } else {
+      if (el) el.textContent = `Server default: ${cfg.pdf_model} via ${cfg.pdf_provider}`;
+    }
     const modelInput = document.getElementById("ocr-model");
-    if (modelInput) modelInput.placeholder = cfg.pdf_model;
+    if (modelInput) modelInput.placeholder = cfg.byok_only ? "required" : cfg.pdf_model;
   } catch(_) {}
   // Populate model list for whichever provider is currently selected
   const providerEl = document.getElementById("ocr-provider");
@@ -1854,6 +1916,21 @@ document.getElementById("btn-approve-normalized").addEventListener("click", asyn
     renderDetail();
     renderJobList();
     showToast("Normalization approved — ready for export");
+  } catch(e) { showToast(e.message, "error"); }
+});
+
+document.getElementById("btn-back-entities").addEventListener("click", () => {
+  viewMode = "entities";
+  renderDetail();
+});
+
+document.getElementById("btn-reopen-normalized").addEventListener("click", async () => {
+  if (!currentJob) return;
+  try {
+    currentJob = await api(`/api/jobs/${currentJob.id}/normalize/reopen`, {method:"POST"});
+    renderDetail();
+    renderJobList();
+    showToast("OCR Check reopened — continue editing");
   } catch(e) { showToast(e.message, "error"); }
 });
 

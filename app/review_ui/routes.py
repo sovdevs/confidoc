@@ -61,6 +61,16 @@ def list_inputs():
     return {"files": pdfs}
 
 
+def _check_byok(api_key: str) -> None:
+    """Raise 403 if BYOK-only mode is active and no user key was supplied."""
+    if settings.byok_only and not api_key.strip():
+        raise HTTPException(
+            403,
+            "This deployment requires you to supply your own API key. "
+            "Enter it in the OCR Model step before processing."
+        )
+
+
 @router.post("/api/inputs/{filename}/process")
 async def process_input(
     background_tasks: BackgroundTasks,
@@ -72,6 +82,7 @@ async def process_input(
     pdf_api_key: str = Form(""),
 ):
     """Start a pipeline job for a PDF already in data/input/."""
+    _check_byok(pdf_api_key)
     pdf_path = settings.input_dir / filename
     if not pdf_path.exists():
         raise HTTPException(404, f"{filename} not found in input directory")
@@ -102,6 +113,7 @@ async def upload(
     pdf_model: str = Form(""),
     pdf_api_key: str = Form(""),
 ):
+    _check_byok(pdf_api_key)
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "PDF files only.")
 
@@ -346,6 +358,15 @@ def approve_normalized(job_id: str):
 
     job_store.update_status(job_id, JobStatus.normalized)
     audit_log.log(job_id, "OCRCHECK_APPROVED", {"path": job.normalized_md})
+    return job_store.load(job_id).model_dump()
+
+
+@router.post("/api/jobs/{job_id}/normalize/reopen")
+def reopen_normalized(job_id: str):
+    """Revert to normalizing so the Zone 1 user can continue editing."""
+    job = _require_job(job_id)
+    job_store.update_status(job_id, JobStatus.normalizing)
+    audit_log.log(job_id, "OCRCHECK_REOPENED", {})
     return job_store.load(job_id).model_dump()
 
 
