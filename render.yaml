@@ -24,6 +24,10 @@ services:
         value: "4"
       - key: CONFIDOC_BYOK_ONLY
         value: "true"          # users must supply their own API key — server key not used
+      - key: CONFIDOC_DEMO_CAPTURE
+        value: "true"          # enables Demo tab + pre-loaded demo documents
+      - key: CONFIDOC_DEMO_API_KEY
+        sync: false            # set manually in Render dashboard — used for demo document processing
     disk:
       name: confidoc-data
       mountPath: /data

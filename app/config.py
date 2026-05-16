@@ -38,9 +38,9 @@ class Settings:
     # key is never used — each user must bring their own.
     byok_only: bool = os.getenv("CONFIDOC_BYOK_ONLY", "false").lower() == "true"
 
-    # ── Demo capture mode ─────────────────────────────────────────────────────
-    # When True, pipeline artifacts are captured under data/demo_runs/ for
-    # reproducible demo playback. Default off; never enable in production.
+    # ── Demo mode ─────────────────────────────────────────────────────────────
+    # When True, shows the Demo tab in the UI and enables pre-loaded demo
+    # documents. Pipeline artifacts are captured to data/demo_runs/.
     demo_capture: bool = os.getenv("CONFIDOC_DEMO_CAPTURE", "false").lower() == "true"
 
     # Server-side key used exclusively for demo document processing.
