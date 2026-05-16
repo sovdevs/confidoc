@@ -13,6 +13,9 @@ RUN uv sync --no-dev --frozen
 # App code
 COPY app/ app/
 
+# Static demo inputs (synthetic only — no real PHI)
+COPY data/demo/ data/demo/
+
 # Render mounts a persistent disk at /data via the DATA_DIR env var
 ENV DATA_DIR=/data
 ENV HOST=0.0.0.0
