@@ -316,6 +316,11 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
            display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 .token-warning { font-size: 12px; color: var(--danger); display: none; }
 
+/* ── Inline OCR panel (collapsible drawer inside Entities view) ── */
+#ocr-inline-details > summary { list-style: none; }
+#ocr-inline-details > summary::-webkit-details-marker { display: none; }
+#ocr-inline-details[open] #ocr-inline-chevron { transform: rotate(90deg); }
+
 /* ── Upload wizard ───────────────────────────────────────── */
 #upload-pane { justify-content: flex-start; padding: 32px 40px; align-items: flex-start; }
 .wizard-step { padding: 20px 0; border-bottom: 1px solid var(--border); width: 100%; }
@@ -753,6 +758,32 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
         </div>
       </div>
 
+      <!-- Inline OCR edit panel (collapsible drawer, shown in Entities view) -->
+      <div id="ocr-inline-wrap" style="display:none;flex-shrink:0;border-top:1px solid var(--border)">
+        <details id="ocr-inline-details">
+          <summary style="padding:8px 16px;cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:10px;user-select:none">
+            <span id="ocr-inline-chevron" style="font-size:10px;transition:transform .2s;flex-shrink:0">▶</span>
+            <span style="font-weight:500;color:var(--text)">Raw Markdown Edit</span>
+            <span id="ocr-inline-flag-count" style="font-size:11px;background:var(--border);border-radius:10px;padding:1px 7px;color:var(--muted)">—</span>
+            <span id="ocr-inline-status" style="font-size:11px;color:var(--muted)"></span>
+          </summary>
+          <div style="display:flex;height:240px;border-top:1px solid var(--border)">
+            <textarea id="ocr-inline-textarea" spellcheck="false"
+              style="flex:1;background:var(--bg);color:var(--text);border:none;resize:none;
+                     padding:12px 16px;font-family:'JetBrains Mono','Fira Code',monospace;
+                     font-size:12px;line-height:1.7;outline:none;border-right:1px solid var(--border)"></textarea>
+            <div id="ocr-inline-flag-list" style="width:260px;overflow-y:auto;padding:8px;font-size:12px"></div>
+          </div>
+          <div style="padding:8px 16px;display:flex;gap:8px;align-items:center;border-top:1px solid var(--border);flex-shrink:0;background:var(--surface)">
+            <span id="ocr-inline-warning" class="token-warning">⚠ Token mismatch</span>
+            <button class="btn btn-ghost btn-sm" id="btn-inline-autofix">⚡ Auto-fix</button>
+            <button class="btn btn-ghost btn-sm" id="btn-inline-save">Save draft</button>
+            <span id="ocr-inline-save-status" style="font-size:11px;color:var(--muted)"></span>
+            <button class="btn btn-primary btn-sm" id="btn-inline-approve-ocr" style="margin-left:auto">✓ Approve OCR</button>
+          </div>
+        </details>
+      </div>
+
       <!-- OCRCheck pane (shown instead of entity/text panels) -->
       <div id="ocr-pane">
         <div class="ocr-body">
@@ -1058,6 +1089,7 @@ function escHtml(s) {
 async function selectJob(id) {
   clearPoll();
   closePdfPanel();
+  document.getElementById("ocr-inline-details").open = false;
   try {
     currentJob = await api(`/api/jobs/${id}`);
   } catch(e) { showToast("Failed to load job", "error"); return; }
@@ -1183,7 +1215,7 @@ function renderViewTabs(j) {
   const canMapping   = !!j.mapping_path;
 
   let html = `<button class="view-tab ${viewMode==="entities"?"active":""}" data-view="entities">Entities</button>`;
-  if (canNormalize) html += `<button class="view-tab ${viewMode==="ocr"?"active":""}" data-view="ocr">OCR Check</button>`;
+  if (canNormalize) html += `<button class="view-tab ${viewMode==="ocr"?"active":""}" data-view="ocr">OCR Check <span style="font-size:9px;font-weight:400;opacity:.5">(optional)</span></button>`;
   if (canMapping)   html += `<button class="view-tab ${viewMode==="mapping"?"active":""}" data-view="mapping">🔑 Mapping</button>`;
   if (canPolicy)    html += `<button class="view-tab ${viewMode==="policy"?"active":""}" data-view="policy">Export</button>`;
   tabs.innerHTML = html;
@@ -1193,15 +1225,17 @@ function renderViewTabs(j) {
 }
 
 function setViewMode(mode, j) {
-  const entityBody = document.querySelector(".detail-body");
-  const ocrPane    = document.getElementById("ocr-pane");
-  const policyPane = document.getElementById("policy-pane");
+  const entityBody   = document.querySelector(".detail-body");
+  const ocrPane      = document.getElementById("ocr-pane");
+  const policyPane   = document.getElementById("policy-pane");
+  const mappingPane  = document.getElementById("mapping-pane");
+  const inlineWrap   = document.getElementById("ocr-inline-wrap");
 
-  const mappingPane = document.getElementById("mapping-pane");
   entityBody.style.display  = "none";
   ocrPane.style.display     = "none";
   policyPane.style.display  = "none";
   mappingPane.style.display = "none";
+  inlineWrap.style.display  = "none";
 
   if (mode === "ocr") {
     ocrPane.style.display = "flex";
@@ -1217,6 +1251,9 @@ function setViewMode(mode, j) {
     loadMappingPane(j);
   } else {
     entityBody.style.display = "flex";
+    if (j && (j.reviewed_md || j.normalized_md)) {
+      inlineWrap.style.display = "block";
+    }
   }
 }
 
@@ -1263,14 +1300,18 @@ function renderActions(j) {
   el.querySelector("#btn-redetect")?.addEventListener("click", redetect);
   el.querySelector("#btn-approve-all")?.addEventListener("click", approveAll);
   el.querySelector("#btn-normalize")?.addEventListener("click", () => {
-    viewMode = "ocr"; renderDetail();
+    const inlineDetails = document.getElementById("ocr-inline-details");
+    inlineDetails.open = true;
+    inlineDetails.scrollIntoView({behavior: "smooth", block: "nearest"});
   });
   el.querySelector("#btn-reopen-ocr")?.addEventListener("click", async () => {
     try {
       currentJob = await api(`/api/jobs/${currentJob.id}/normalize/reopen`, {method:"POST"});
-      viewMode = "ocr";
       renderDetail();
       renderJobList();
+      const inlineDetails = document.getElementById("ocr-inline-details");
+      inlineDetails.open = true;
+      await loadOcrInlinePanel(currentJob);
       showToast("OCR Check reopened — continue editing");
     } catch(e) { showToast(e.message, "error"); }
   });
@@ -2032,6 +2073,141 @@ document.getElementById("btn-reopen-normalized").addEventListener("click", async
     renderDetail();
     renderJobList();
     showToast("OCR Check reopened — continue editing");
+  } catch(e) { showToast(e.message, "error"); }
+});
+
+// ── Inline OCR panel ──────────────────────────────────────
+const ocrInlineDetails    = document.getElementById("ocr-inline-details");
+const ocrInlineTextarea   = document.getElementById("ocr-inline-textarea");
+const ocrInlineFlagList   = document.getElementById("ocr-inline-flag-list");
+const ocrInlineFlagCount  = document.getElementById("ocr-inline-flag-count");
+const ocrInlineStatus     = document.getElementById("ocr-inline-status");
+const ocrInlineWarning    = document.getElementById("ocr-inline-warning");
+const ocrInlineSaveStatus = document.getElementById("ocr-inline-save-status");
+let ocrInlineSourceText   = "";
+let ocrInlineSaveTimer    = null;
+
+ocrInlineDetails.addEventListener("toggle", () => {
+  if (ocrInlineDetails.open && currentJob) loadOcrInlinePanel(currentJob);
+});
+
+async function loadOcrInlinePanel(j) {
+  ocrInlineTextarea.value = "";
+  ocrInlineFlagList.innerHTML = `<div style="padding:20px"><div class="spinner"></div></div>`;
+  ocrInlineStatus.textContent = "";
+
+  try {
+    let res;
+    if (j.status === "approved" || (!j.normalized_md && !["normalizing","normalized","done"].includes(j.status))) {
+      res = await api(`/api/jobs/${j.id}/normalize/start`, {method:"POST"});
+      currentJob = res.job;
+      renderJobList();
+    } else {
+      res = await api(`/api/jobs/${j.id}/normalize`);
+    }
+    ocrInlineSourceText = res.markdown;
+    ocrInlineTextarea.value = res.markdown;
+    renderInlineFlags(res.flags);
+
+    const approved = ["normalized","done"].includes(currentJob?.status ?? j.status);
+    const approveBtn = document.getElementById("btn-inline-approve-ocr");
+    approveBtn.disabled = approved;
+    approveBtn.textContent = approved ? "✓ OCR Approved" : "✓ Approve OCR";
+    ocrInlineStatus.textContent = approved ? "· approved" : "";
+    ocrInlineStatus.style.color = "var(--success)";
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+function renderInlineFlags(flags) {
+  const n = flags.length;
+  ocrInlineFlagCount.textContent = n ? `${n} flag${n !== 1 ? "s" : ""}` : "✓ clean";
+  ocrInlineFlagCount.style.color      = n ? "var(--warning)" : "var(--success)";
+  ocrInlineFlagCount.style.background = n ? "#2a1a00"        : "#0d2a1a";
+
+  if (!n) {
+    ocrInlineFlagList.innerHTML = `<div style="padding:20px;text-align:center;font-size:12px;color:var(--success)">✓ No issues found</div>`;
+    return;
+  }
+  ocrInlineFlagList.innerHTML = flags.map((f, i) => `
+    <div class="flag-card ${f.severity}" data-idx="${i}" data-start="${f.start}" data-end="${f.end}">
+      <div class="flag-text">${escHtml(f.text)}</div>
+      <div class="flag-msg">${escHtml(f.message)}</div>
+      ${f.suggestion != null ? `<div class="flag-sugg">→ ${escHtml(f.suggestion)}</div>
+        <button class="flag-apply" data-start="${f.start}" data-end="${f.end}" data-sugg="${escHtml(f.suggestion)}">Apply</button>` : ""}
+    </div>
+  `).join("");
+
+  ocrInlineFlagList.querySelectorAll(".flag-card").forEach(card => {
+    card.addEventListener("click", e => {
+      if (e.target.classList.contains("flag-apply")) return;
+      const s = +card.dataset.start, end = +card.dataset.end;
+      ocrInlineTextarea.focus();
+      ocrInlineTextarea.setSelectionRange(s, end);
+    });
+  });
+  ocrInlineFlagList.querySelectorAll(".flag-apply").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const s = +btn.dataset.start, end = +btn.dataset.end;
+      ocrInlineTextarea.value = ocrInlineTextarea.value.slice(0, s) + btn.dataset.sugg + ocrInlineTextarea.value.slice(end);
+      scheduleInlineOcrSave();
+    });
+  });
+}
+
+ocrInlineTextarea.addEventListener("input", () => {
+  const mismatch = ocrInlineSourceText && !tokensMatch(ocrInlineSourceText, ocrInlineTextarea.value);
+  ocrInlineWarning.style.display = mismatch ? "block" : "none";
+  scheduleInlineOcrSave();
+});
+
+function scheduleInlineOcrSave() {
+  clearTimeout(ocrInlineSaveTimer);
+  ocrInlineSaveStatus.textContent = "Unsaved…";
+  ocrInlineSaveTimer = setTimeout(saveInlineOcrDraft, 1800);
+}
+
+async function saveInlineOcrDraft() {
+  if (!currentJob) return;
+  try {
+    const res = await api(`/api/jobs/${currentJob.id}/normalize`, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({markdown: ocrInlineTextarea.value}),
+    });
+    ocrInlineSaveStatus.textContent = "Saved";
+    setTimeout(() => { ocrInlineSaveStatus.textContent = ""; }, 2000);
+    renderInlineFlags(res.flags);
+  } catch(e) {
+    ocrInlineSaveStatus.textContent = "";
+    showToast(e.message || "Save failed", "error");
+  }
+}
+
+document.getElementById("btn-inline-autofix").addEventListener("click", async () => {
+  if (!currentJob) return;
+  const res  = await api(`/api/jobs/${currentJob.id}/normalize/auto`, {method: "POST"});
+  const data = await api(`/api/jobs/${currentJob.id}/normalize`);
+  ocrInlineTextarea.value = data.markdown;
+  ocrInlineSourceText     = data.markdown;
+  renderInlineFlags(res.flags);
+  showToast(`Auto-fixed ${res.fixes_applied} — ${res.remaining_flags} remain`);
+});
+
+document.getElementById("btn-inline-save").addEventListener("click", saveInlineOcrDraft);
+
+document.getElementById("btn-inline-approve-ocr").addEventListener("click", async () => {
+  if (!currentJob) return;
+  if (ocrInlineSourceText && !tokensMatch(ocrInlineSourceText, ocrInlineTextarea.value)) {
+    showToast("Cannot approve — stable tokens were modified", "error"); return;
+  }
+  await saveInlineOcrDraft();
+  try {
+    currentJob = await api(`/api/jobs/${currentJob.id}/normalize/approve`, {method: "POST"});
+    renderDetail();
+    renderJobList();
+    await loadOcrInlinePanel(currentJob);
+    showToast("OCR approved — ready for export");
   } catch(e) { showToast(e.message, "error"); }
 });
 
