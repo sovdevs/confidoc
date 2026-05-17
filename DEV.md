@@ -45,10 +45,21 @@ app/
     anon_llm.py          LLM PII detection (BYOK, text-only)
     export.py            stable token assignment + TMX/CSV export
     ocr_check.py         OCR artefact detection for normalization stage
+  api/
+    server_sources.py    source ingest endpoints (list/test/pull)
+  connectors/
+    base.py              SourceConnector interface + RemoteFile types
+    sftp_connector.py    SFTP via paramiko (key or password auth from env)
+    webdav_connector.py  WebDAV/Nextcloud via httpx PROPFIND
+    github_connector.py  GitHub REST API (private repo file listing/download)
   services/
-    llm_adapter.py       thin BYOK wrapper (pdf_complete_vision / anon_complete)
+    llm_adapter.py       thin BYOK wrapper (pdf_complete_vision / anon_complete / llm_export_complete)
+    prompt_loader.py     load LLM export prompts from data/llm_export_prompts/*.md
+    source_config_loader.py  load data/source_configs/sources.json; strip credentials
+    ingest_registry.py   append-only JSONL tracking seen remote files
+    source_ingest_service.py  download → sanitise → create imported job → register
   review_ui/
-    routes.py            all FastAPI routes
+    routes.py            all FastAPI routes (including /api/jobs/{id}/process)
     templates/index.html single-page browser UI
   storage/
     jobs.py              Job model + file-backed job store
@@ -60,16 +71,23 @@ vendor/
                          LLM pipeline bypassed — Confidoc owns extraction via BYOK
 
 data/
-  input/       raw PDFs
-  extracted/   Gemini-extracted markdown (Zone 1 — raw PHI)
-  reviewed/    pseudonymized markdown (stable tokens applied)
-  normalized/  OCRCheck-corrected markdown
-  exported/    TMX + CSV (Zone 2 artifacts)
-  final/       rehydrated final documents (Zone 1, controlled)
-  jobs/        one JSON per job
-  mappings/    encrypted token maps — never exported
-  audit.jsonl  append-only event log
-  approved_terms.jsonl  LLM few-shot knowledge base
+  input/                 raw PDFs (uploaded or pulled from server sources)
+  extracted/             Gemini-extracted markdown (Zone 1 — raw PHI)
+  reviewed/              pseudonymized markdown (stable tokens applied)
+  normalized/            OCRCheck-corrected markdown
+  exported/              TMX + CSV (Zone 2 artifacts)
+  final/                 rehydrated final documents (Zone 1, controlled)
+  jobs/                  one JSON per job
+  mappings/              encrypted token maps — never exported
+  prepared_packages/     policy engine output packages (Zone 2)
+  llm_runs/              LLM export run artifacts (per job_id)
+  llm_export_prompts/    saved prompt .md files for LLM export feature
+  source_configs/        sources.json (operator-managed, see sources.sample.json)
+  zone1/
+    previews/            per-job PDF page PNGs (Zone 1 only)
+    ingest_registry.jsonl  seen-file registry for server source deduplication
+  audit.jsonl            append-only event log
+  approved_terms.jsonl   LLM few-shot knowledge base
 ```
 
 ## LLM provider configuration
@@ -88,6 +106,65 @@ CONFIDOC_PDF_PROVIDER=localhost
 CONFIDOC_PDF_MODEL=llava:13b
 CONFIDOC_PDF_BASE_URL=http://localhost:11434/v1
 ```
+
+When using the Google direct provider (not via OpenRouter), model IDs must omit the
+`google/` prefix — e.g. `gemini-2.0-flash`, not `google/gemini-2.0-flash`. The LLM
+adapter strips the prefix automatically when `provider=google`.
+
+## LLM Export
+
+Users can send the approved pseudonymized markdown to any configured LLM from the Export tab.
+
+Saved prompts live in `data/llm_export_prompts/*.md` (YAML front matter optional).
+Run artifacts are stored in `data/llm_runs/{job_id}/{run_id}.json` — no API keys, no PHI.
+
+Adding a prompt: drop a `.md` file into `data/llm_export_prompts/` and restart (or add a
+`COPY` line to the Dockerfile for deployed instances).
+
+## Server Source Ingest
+
+The Server tab in Step 1 of the upload wizard lets operators pull documents from remote
+sources into Zone 1 without triggering processing.
+
+**Job lifecycle:**
+```
+imported → (user clicks Process) → processing → extracting → reviewing → …
+```
+
+`imported` and `processing` are distinct statuses — the pipeline never starts automatically
+on server-ingested files.
+
+**Configure sources:** copy `data/source_configs/sources.sample.json` to
+`data/source_configs/sources.json` and fill in real values. Credentials are referenced via
+env var names only — never stored in the config file itself.
+
+```json
+{
+  "id": "clinic_sftp",
+  "type": "sftp",
+  "host": "sftp.example.com",
+  "username_env": "CONFIDOC_SFTP_USER",
+  "private_key_path_env": "CONFIDOC_SFTP_KEY_PATH",
+  "remote_path": "/incoming/reports",
+  "filename_patterns": ["*.pdf", "*.docx"],
+  "enabled": true
+}
+```
+
+Supported connector types: `sftp`, `webdav` / `nextcloud`, `github`.
+
+**Deduplication:** `data/zone1/ingest_registry.jsonl` tracks every pulled file by
+`(source_id, remote_path, size, mtime)`. Files are classified as `new`, `seen`, or
+`changed`. Changed files are imported as a new job; the registry records the
+`previous_job_id` link.
+
+**Security rules:**
+- Credentials resolved from env vars at connect time; never logged or stored in artifacts
+- Remote paths hashed in audit events (filenames may contain PHI)
+- Filenames sanitised before writing to disk (path traversal prevention)
+- Supported extensions enforced: `.pdf .docx .doc .rtf .txt .md .odt`
+- Non-PDF imports get `requires_ocr=false`; the Process button is disabled for them
+  pending future extraction support
 
 ## Zone model
 
@@ -109,10 +186,18 @@ insulates Confidoc from that path change.
 
 1. Add the new status to `JobStatus` in `app/storage/jobs.py`
 2. Add any new artifact paths to `Job` model and `Settings.ensure_dirs()`
-3. Add routes in `app/review_ui/routes.py`
+3. Add routes in `app/review_ui/routes.py` (or a new router under `app/api/`)
 4. Update the UI in `app/review_ui/templates/index.html`
 5. Add audit events for the new stage
 6. Update `IMPLEMENTATION.md`
+
+## Adding a new source connector
+
+1. Create `app/connectors/{type}_connector.py` extending `SourceConnector`
+2. Implement `test()`, `list_files()`, `download_file()`
+3. Register the type in `app/connectors/__init__.py → get_connector()`
+4. Add an example entry to `data/source_configs/sources.sample.json`
+5. Document required env vars in this file
 
 ## Deployment
 
