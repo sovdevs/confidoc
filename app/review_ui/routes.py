@@ -1280,22 +1280,22 @@ def list_llm_export_prompts():
 
 
 class LLMExportRunBody(BaseModel):
-    prompt_mode: str = "saved"          # saved | ad_hoc | saved_plus_ad_hoc
+    prompt_mode: str = "saved"           # saved | adhoc | combined
     prompt_id: str | None = None
     ad_hoc_prompt: str | None = None
     provider: str | None = None
     model: str | None = None
-    api_key: str | None = None
-    source_type: str = "reviewed_markdown"  # reviewed_markdown | policy_package
-    package_id: str | None = None
+    api_key: str | None = None           # never persisted
+    source_mode: str = "reviewed_md"     # reviewed_md | policy_package
+    policy_package_id: str | None = None
 
 
 @router.post("/api/llm-export/{job_id}/run")
 async def run_llm_export(job_id: str, body: LLMExportRunBody):
     """Create an LLM export package and run it against the selected model.
 
-    source_type = "reviewed_markdown": uses normalized_md or reviewed_md (Zone 2 safe).
-    source_type = "policy_package":    uses prepared.md from a specific policy package.
+    source_mode = "reviewed_md":     uses normalized_md or reviewed_md (Zone 2 safe).
+    source_mode = "policy_package":  uses prepared.md from a specific policy package.
     """
     import uuid
     from datetime import datetime
@@ -1305,27 +1305,24 @@ async def run_llm_export(job_id: str, body: LLMExportRunBody):
     job = _require_job(job_id)
 
     # --- Resolve markdown source ---
-    if body.source_type == "policy_package":
-        if not body.package_id:
-            raise HTTPException(400, "package_id required when source_type is policy_package")
-        prepared_md = settings.prepared_packages_dir / body.package_id / "prepared.md"
+    if body.source_mode == "policy_package":
+        if not body.policy_package_id:
+            raise HTTPException(400, "policy_package_id required when source_mode is policy_package")
+        prepared_md = settings.prepared_packages_dir / body.policy_package_id / "prepared.md"
         if not prepared_md.exists():
             raise HTTPException(404, "Prepared package markdown not found")
-        document = prepared_md.read_text(encoding="utf-8")
-        privacy_level = "policy_package"
+        source_markdown = prepared_md.read_text(encoding="utf-8")
     else:
         md_path = Path(job.normalized_md) if job.normalized_md else (
             Path(job.reviewed_md) if job.reviewed_md else None
         )
         if not md_path or not md_path.exists():
             raise HTTPException(400, "No approved pseudonymized markdown available for this job")
-        document = md_path.read_text(encoding="utf-8")
-        privacy_level = "pii_public"
+        source_markdown = md_path.read_text(encoding="utf-8")
 
     # --- Assemble prompt ---
     saved_text = ""
     prompt_name = ""
-    task_type = "custom"
 
     if body.prompt_id:
         p = get_prompt_by_id(body.prompt_id)
@@ -1333,51 +1330,45 @@ async def run_llm_export(job_id: str, body: LLMExportRunBody):
             raise HTTPException(404, f"Prompt '{body.prompt_id}' not found")
         saved_text = p["prompt_text"]
         prompt_name = p["title"]
-        task_type = p["task_type"]
 
     ad_hoc = (body.ad_hoc_prompt or "").strip()
 
     if body.prompt_mode == "saved":
-        combined = saved_text
-    elif body.prompt_mode == "ad_hoc":
-        combined = ad_hoc
-    else:  # saved_plus_ad_hoc
-        combined = saved_text + (f"\n\nAdditional instruction:\n{ad_hoc}" if ad_hoc else "")
+        effective_prompt = saved_text
+    elif body.prompt_mode == "adhoc":
+        effective_prompt = ad_hoc
+    else:  # combined
+        effective_prompt = saved_text + (f"\n\nAdditional instruction:\n{ad_hoc}" if ad_hoc else "")
 
-    if not combined.strip():
+    if not effective_prompt.strip():
         raise HTTPException(400, "No prompt provided")
 
-    # --- LLM selection ---
+    # --- LLM selection (api_key resolved here, never persisted) ---
     provider = body.provider or settings.anon_provider
     model    = body.model    or settings.anon_model
     api_key  = body.api_key  or settings.anon_api_key
 
-    # --- Build and persist the run record ---
+    # --- Build and persist the run record (no api_key) ---
     run_id     = uuid.uuid4().hex[:12]
     created_at = datetime.utcnow().isoformat() + "Z"
 
     run_record: dict = {
-        "run_id":        run_id,
-        "job_id":        job_id,
-        "source_type":   body.source_type,
-        "package_id":    body.package_id,
-        "prompt_id":     body.prompt_id,
-        "prompt_name":   prompt_name,
-        "prompt_text":   saved_text,
-        "ad_hoc_prompt": ad_hoc,
-        "prompt_mode":   body.prompt_mode,
-        "combined_prompt": combined,
-        "task_type":     task_type,
-        "provider":      provider,
-        "model":         model,
-        "rag_enabled":   False,
-        "tools_allowed": False,
-        "rag_scope":     None,
-        "privacy_level": privacy_level,
-        "output_text":   None,
-        "status":        "running",
-        "error":         None,
-        "created_at":    created_at,
+        "run_id":             run_id,
+        "job_id":             job_id,
+        "source_mode":        body.source_mode,
+        "policy_package_id":  body.policy_package_id,
+        "prompt_mode":        body.prompt_mode,
+        "prompt_id":          body.prompt_id,
+        "effective_prompt":   effective_prompt,
+        "source_markdown":    source_markdown,
+        "provider":           provider,
+        "model":              model,
+        "llm_output":         None,
+        "tools_allowed":      False,
+        "rag_enabled":        False,
+        "status":             "running",
+        "error":              None,
+        "created_at":         created_at,
     }
 
     run_dir = settings.llm_runs_dir / job_id
@@ -1387,17 +1378,17 @@ async def run_llm_export(job_id: str, body: LLMExportRunBody):
 
     try:
         output = await llm_export_complete(
-            prompt=combined,
-            document=document,
+            prompt=effective_prompt,
+            document=source_markdown,
             provider=provider,
             model=model,
             api_key=api_key,
         )
-        run_record["output_text"] = output
-        run_record["status"]      = "completed"
+        run_record["llm_output"] = output
+        run_record["status"]     = "completed"
         audit_log.log(job_id, "LLM_EXPORT_RUN", {
             "run_id": run_id, "prompt_id": body.prompt_id,
-            "source_type": body.source_type, "provider": provider, "model": model,
+            "source_mode": body.source_mode, "provider": provider, "model": model,
         })
     except Exception as exc:
         run_record["status"] = "failed"
@@ -1409,12 +1400,11 @@ async def run_llm_export(job_id: str, body: LLMExportRunBody):
     return {
         "run_id":      run_record["run_id"],
         "status":      run_record["status"],
-        "output_text": run_record["output_text"],
+        "llm_output":  run_record["llm_output"],
         "error":       run_record["error"],
         "provider":    provider,
         "model":       model,
         "prompt_name": prompt_name,
-        "task_type":   task_type,
         "created_at":  created_at,
     }
 
@@ -1430,18 +1420,16 @@ def list_llm_runs(job_id: str):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             runs.append({
-                "run_id":        data.get("run_id"),
-                "status":        data.get("status"),
-                "prompt_id":     data.get("prompt_id"),
-                "prompt_name":   data.get("prompt_name"),
-                "task_type":     data.get("task_type"),
-                "provider":      data.get("provider"),
-                "model":         data.get("model"),
-                "source_type":   data.get("source_type"),
-                "privacy_level": data.get("privacy_level"),
-                "created_at":    data.get("created_at"),
-                "output_text":   data.get("output_text"),
-                "error":         data.get("error"),
+                "run_id":            data.get("run_id"),
+                "status":            data.get("status"),
+                "prompt_id":         data.get("prompt_id"),
+                "source_mode":       data.get("source_mode"),
+                "policy_package_id": data.get("policy_package_id"),
+                "provider":          data.get("provider"),
+                "model":             data.get("model"),
+                "created_at":        data.get("created_at"),
+                "llm_output":        data.get("llm_output"),
+                "error":             data.get("error"),
             })
         except Exception:
             continue

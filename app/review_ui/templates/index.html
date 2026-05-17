@@ -954,7 +954,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             <div class="form-group">
               <label>Document source</label>
               <select id="llm-source-type">
-                <option value="reviewed_markdown">Reviewed / normalized markdown (quick)</option>
+                <option value="reviewed_md">Reviewed / normalized markdown (quick)</option>
                 <option value="policy_package">Policy package — prepared.md (audited)</option>
               </select>
             </div>
@@ -968,8 +968,8 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               <label>Prompt mode</label>
               <select id="llm-prompt-mode">
                 <option value="saved">Saved prompt</option>
-                <option value="ad_hoc">Ad hoc prompt</option>
-                <option value="saved_plus_ad_hoc">Saved prompt + additional instruction</option>
+                <option value="adhoc">Ad hoc prompt</option>
+                <option value="combined">Saved prompt + additional instruction</option>
               </select>
             </div>
             <div class="form-group" id="llm-saved-prompt-row">
@@ -1012,11 +1012,14 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
                             border-radius:7px;padding:7px 8px;font-size:12px;outline:none;width:100%">
             </div>
 
+            <div style="font-size:11px;color:var(--muted);line-height:1.6;background:#12162a;border:1px solid var(--border);border-radius:7px;padding:8px 10px">
+              <strong style="color:var(--text)">Privacy</strong> — Only PII-public / transformed markdown is sent to the selected LLM. Original PDF and encrypted mappings are never sent.
+            </div>
+
             <button class="btn btn-primary btn-block" id="llm-run-btn">▶ Run with LLM</button>
             <div id="llm-run-error" style="display:none;font-size:12px;color:var(--danger);line-height:1.5"></div>
 
             <div style="font-size:10px;color:var(--muted);line-height:1.6;border-top:1px solid var(--border);padding-top:10px">
-              Only the approved pseudonymized markdown is sent — no PHI, no token mapping.<br>
               RAG/tool use will be available in a later version.
             </div>
           </div>
@@ -2379,7 +2382,7 @@ document.getElementById("llm-source-type").addEventListener("change", function()
 document.getElementById("llm-prompt-mode").addEventListener("change", function() {
   const savedRow = document.getElementById("llm-saved-prompt-row");
   const adhocRow = document.getElementById("llm-adhoc-row");
-  savedRow.style.display = (this.value === "ad_hoc") ? "none" : "flex";
+  savedRow.style.display = (this.value === "adhoc")  ? "none" : "flex";
   adhocRow.style.display = (this.value === "saved")  ? "none" : "flex";
 });
 
@@ -2414,7 +2417,7 @@ document.getElementById("llm-run-btn").addEventListener("click", async () => {
   if (promptMode === "saved" && !promptId) {
     errEl.textContent = "Select a saved prompt."; errEl.style.display = "block"; return;
   }
-  if (promptMode === "ad_hoc" && !adhoc) {
+  if (promptMode === "adhoc" && !adhoc) {
     errEl.textContent = "Enter a prompt in the ad hoc field."; errEl.style.display = "block"; return;
   }
   if (sourceType === "policy_package" && !packageId) {
@@ -2431,14 +2434,14 @@ document.getElementById("llm-run-btn").addEventListener("click", async () => {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
-        prompt_mode: promptMode,
-        prompt_id:   promptId,
-        ad_hoc_prompt: adhoc,
-        source_type: sourceType,
-        package_id:  packageId,
+        prompt_mode:       promptMode,
+        prompt_id:         promptId,
+        ad_hoc_prompt:     adhoc,
+        source_mode:       sourceType,
+        policy_package_id: packageId,
         provider,
         model,
-        api_key: apiKey,
+        api_key:           apiKey,
       }),
     });
     renderLLMRun(run);
@@ -2466,7 +2469,7 @@ function renderLLMRun(run) {
   } else {
     metaEl.textContent = `${run.prompt_name || "Ad hoc"} · ${run.model} · ${fmtTime(run.created_at)}`;
     textEl.style.color = "var(--text)";
-    textEl.textContent = run.output_text || "";
+    textEl.textContent = run.llm_output || "";
   }
   resultEl.style.display = "block";
 }
@@ -2488,7 +2491,7 @@ async function loadLLMHistory(jobId) {
           <span class="badge badge-${r.status === "completed" ? "done" : "failed"}">${r.status}</span>
           <span style="color:var(--muted);margin-left:auto">${fmtTime(r.created_at)}</span>
         </div>
-        ${r.output_text ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">${escHtml(r.output_text.slice(0, 120))}…</div>` : ""}
+        ${r.llm_output ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">${escHtml(r.llm_output.slice(0, 120))}…</div>` : ""}
       </div>
     `).join("");
   } catch(_) {}
