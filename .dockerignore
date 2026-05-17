@@ -2,6 +2,7 @@
 data/
 !data/demo/
 !data/demo_runs/
+!data/llm_export_prompts/
 __pycache__
 **/__pycache__
 *.pyc
