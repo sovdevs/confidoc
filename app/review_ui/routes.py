@@ -316,6 +316,14 @@ def approve_all(job_id: str):
         safe_display=f"{len(updated)} entities approved",
     )
     demo_capture.capture_review_final(job_id, job_store.load(job_id))
+
+    # Generate reviewed_md immediately so OCR Check and LLM Export are available
+    # without requiring the user to run the policy engine first.
+    try:
+        export.run(job_store.load(job_id), reviewer="human")
+    except Exception:
+        pass  # non-fatal — reviewed_md will be created on first export instead
+
     return {"ok": True, "count": len(updated)}
 
 
