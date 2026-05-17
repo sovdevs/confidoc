@@ -1266,11 +1266,19 @@ const _zone1Statuses = new Set(["extracting", "reviewing"]);
 
 function updateZone1(j) {
   const banner  = document.getElementById("zone1-banner");
-  const pdfBtn  = document.getElementById("view-pdf-btn");
   const isZone1 = _zone1Statuses.has(j.status);
   banner.style.display  = isZone1 ? "flex" : "none";
   detailPane.classList.toggle("zone1", isZone1);
-  if (pdfBtn) pdfBtn.style.display = j.filename?.toLowerCase().endsWith(".pdf") ? "inline-flex" : "none";
+  updatePdfBtn(j);
+}
+
+function updatePdfBtn(j) {
+  const pdfBtn = document.getElementById("view-pdf-btn");
+  if (!pdfBtn) return;
+  // Hide on Export tab — the PDF is Zone 1 material and irrelevant there
+  const showable = j?.filename?.toLowerCase().endsWith(".pdf") && viewMode !== "policy";
+  pdfBtn.style.display = showable ? "inline-flex" : "none";
+  if (!showable) closePdfPanel();
 }
 
 // ── PDF side panel ────────────────────────────────────────
@@ -1372,6 +1380,7 @@ function setViewMode(mode, j) {
       inlineWrap.style.display = "block";
     }
   }
+  updatePdfBtn(j);
 }
 
 function renderActions(j) {

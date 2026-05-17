@@ -1193,6 +1193,12 @@ async def process_demo_input(
 
     import shutil as _shutil
 
+    # Copy demo PDF to input_dir so /api/jobs/{job_id}/pdf can serve it
+    demo_pdf_src = settings.demo_dir / filename
+    if demo_pdf_src.exists():
+        settings.input_dir.mkdir(parents=True, exist_ok=True)
+        _shutil.copy2(demo_pdf_src, settings.input_dir / filename)
+
     # Copy pre-captured extracted markdown
     src_md = playback_dir / "01_extraction" / "extracted.md"
     dest_md = settings.extracted_dir / (Path(filename).stem + f"_{job.id}.md")
