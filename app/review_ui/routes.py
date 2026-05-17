@@ -1313,10 +1313,11 @@ async def run_llm_export(job_id: str, body: LLMExportRunBody):
             raise HTTPException(404, "Prepared package markdown not found")
         source_markdown = prepared_md.read_text(encoding="utf-8")
     else:
-        md_path = Path(job.normalized_md) if job.normalized_md else (
-            Path(job.reviewed_md) if job.reviewed_md else None
-        )
-        if not md_path or not md_path.exists():
+        rel = job.normalized_md or job.reviewed_md
+        if not rel:
+            raise HTTPException(400, "No approved pseudonymized markdown available for this job")
+        md_path = settings.jobs_dir.parent / rel
+        if not md_path.exists():
             raise HTTPException(400, "No approved pseudonymized markdown available for this job")
         source_markdown = md_path.read_text(encoding="utf-8")
 
