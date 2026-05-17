@@ -1191,27 +1191,49 @@ async def process_demo_input(
     job_store.save(job)
     audit_log.log(job.id, "job_created", {"filename": filename, "source": "demo_playback"})
 
-    # Copy pre-captured extracted markdown into the normal extracted dir
+    import shutil as _shutil
+
+    # Copy pre-captured extracted markdown
     src_md = playback_dir / "01_extraction" / "extracted.md"
     dest_md = settings.extracted_dir / (Path(filename).stem + f"_{job.id}.md")
     settings.extracted_dir.mkdir(parents=True, exist_ok=True)
-    import shutil as _shutil
     _shutil.copy2(src_md, dest_md)
     rel_md = str(dest_md.relative_to(settings.jobs_dir.parent))
 
-    # Load pre-captured entities
-    entities_path = playback_dir / "02_auto_entities" / "entities_auto.json"
+    # Restore reviewed_md from the captured export package (Zone-2-safe pseudonymized markdown).
+    # Without this, OCR Check and LLM Export have no source document in playback mode.
+    rel_reviewed = None
+    prepared_src = playback_dir / "04_export_package" / "prepared.md"
+    if prepared_src.exists():
+        content = prepared_src.read_text(encoding="utf-8")
+        # Strip the embedded package-ID comment inserted by the policy engine
+        if content.startswith("<!-- confidoc-package:"):
+            content = content[content.index("-->\n") + 4:]
+        settings.reviewed_dir.mkdir(parents=True, exist_ok=True)
+        reviewed_dest = settings.reviewed_dir / (Path(filename).stem + f"_{job.id}_reviewed.md")
+        reviewed_dest.write_text(content, encoding="utf-8")
+        rel_reviewed = str(reviewed_dest.relative_to(settings.jobs_dir.parent))
+
+    # Load pre-captured entities — prefer the manually-reviewed snapshot if available
+    reviewed_entities_path = playback_dir / "03_manual_review" / "entities_reviewed.json"
+    entities_path = reviewed_entities_path if reviewed_entities_path.exists() else (
+        playback_dir / "02_auto_entities" / "entities_auto.json"
+    )
     raw = json.loads(entities_path.read_text(encoding="utf-8"))
     from app.storage.jobs import Entity
     entities = [Entity.model_validate(e) for e in raw.get("entities", [])]
 
-    job_store.update_status(job.id, JobStatus.reviewing,
-                            extracted_md=rel_md, entities=entities)
+    # Use 'approved' when we have reviewed_md so OCR Check tab and LLM Export are available
+    demo_status = JobStatus.approved if rel_reviewed else JobStatus.reviewing
+    update_kwargs: dict = {"extracted_md": rel_md, "entities": entities}
+    if rel_reviewed:
+        update_kwargs["reviewed_md"] = rel_reviewed
+    job_store.update_status(job.id, demo_status, **update_kwargs)
 
     run_id = demo_capture.start_demo_run(job.id, label=f"Demo playback: {filename}")
     audit_log.log(job.id, "DEMO_PLAYBACK_LOADED", {"demo_run_id": run_id, "source": str(playback_dir)})
 
-    return {"job_id": job.id, "demo_run_id": run_id, "status": JobStatus.reviewing}
+    return {"job_id": job.id, "demo_run_id": run_id, "status": demo_status}
 
 
 @router.post("/api/demo/start")
