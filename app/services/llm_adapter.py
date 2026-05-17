@@ -106,3 +106,34 @@ async def anon_complete(
         resp = await _anon_service.complete(request)
 
     return resp.content
+
+
+async def llm_export_complete(
+    prompt: str,
+    document: str,
+    provider: str,
+    model: str,
+    api_key: str,
+) -> str:
+    """Run a user-facing LLM export task (summary, translation, QA, etc.).
+
+    The document must already be PII-public (pseudonymized) markdown.
+    No hardcoded system prompt — the caller supplies the full prompt.
+    """
+    messages = [
+        {"role": "user", "content": f"{prompt}\n\nDocument:\n{document}"},
+    ]
+    request = LLMRequest(
+        messages=messages,
+        model=model,
+        temperature=0.0,
+    )
+
+    if provider == "localhost":
+        resp = await _localhost_provider("").complete(request, api_key=api_key or "none")
+    elif provider == "google":
+        resp = await _google_provider("").complete(request, api_key=api_key or "none")
+    else:
+        resp = await _make_service(provider, api_key).complete(request)
+
+    return resp.content

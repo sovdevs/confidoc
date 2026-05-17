@@ -1270,6 +1270,184 @@ def demo_run_files(demo_run_id: str):
     return {"demo_run_id": demo_run_id, "meta": meta, "stages": stages}
 
 
+# ── LLM Export ───────────────────────────────────────────────────────────────
+
+@router.get("/api/llm-export/prompts")
+def list_llm_export_prompts():
+    """Return available saved prompt files from data/llm_export_prompts/."""
+    from app.services.prompt_loader import load_prompts
+    return {"prompts": load_prompts()}
+
+
+class LLMExportRunBody(BaseModel):
+    prompt_mode: str = "saved"          # saved | ad_hoc | saved_plus_ad_hoc
+    prompt_id: str | None = None
+    ad_hoc_prompt: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+    source_type: str = "reviewed_markdown"  # reviewed_markdown | policy_package
+    package_id: str | None = None
+
+
+@router.post("/api/llm-export/{job_id}/run")
+async def run_llm_export(job_id: str, body: LLMExportRunBody):
+    """Create an LLM export package and run it against the selected model.
+
+    source_type = "reviewed_markdown": uses normalized_md or reviewed_md (Zone 2 safe).
+    source_type = "policy_package":    uses prepared.md from a specific policy package.
+    """
+    import uuid
+    from datetime import datetime
+    from app.services.prompt_loader import get_prompt_by_id
+    from app.services.llm_adapter import llm_export_complete
+
+    job = _require_job(job_id)
+
+    # --- Resolve markdown source ---
+    if body.source_type == "policy_package":
+        if not body.package_id:
+            raise HTTPException(400, "package_id required when source_type is policy_package")
+        prepared_md = settings.prepared_packages_dir / body.package_id / "prepared.md"
+        if not prepared_md.exists():
+            raise HTTPException(404, "Prepared package markdown not found")
+        document = prepared_md.read_text(encoding="utf-8")
+        privacy_level = "policy_package"
+    else:
+        md_path = Path(job.normalized_md) if job.normalized_md else (
+            Path(job.reviewed_md) if job.reviewed_md else None
+        )
+        if not md_path or not md_path.exists():
+            raise HTTPException(400, "No approved pseudonymized markdown available for this job")
+        document = md_path.read_text(encoding="utf-8")
+        privacy_level = "pii_public"
+
+    # --- Assemble prompt ---
+    saved_text = ""
+    prompt_name = ""
+    task_type = "custom"
+
+    if body.prompt_id:
+        p = get_prompt_by_id(body.prompt_id)
+        if not p:
+            raise HTTPException(404, f"Prompt '{body.prompt_id}' not found")
+        saved_text = p["prompt_text"]
+        prompt_name = p["title"]
+        task_type = p["task_type"]
+
+    ad_hoc = (body.ad_hoc_prompt or "").strip()
+
+    if body.prompt_mode == "saved":
+        combined = saved_text
+    elif body.prompt_mode == "ad_hoc":
+        combined = ad_hoc
+    else:  # saved_plus_ad_hoc
+        combined = saved_text + (f"\n\nAdditional instruction:\n{ad_hoc}" if ad_hoc else "")
+
+    if not combined.strip():
+        raise HTTPException(400, "No prompt provided")
+
+    # --- LLM selection ---
+    provider = body.provider or settings.anon_provider
+    model    = body.model    or settings.anon_model
+    api_key  = body.api_key  or settings.anon_api_key
+
+    # --- Build and persist the run record ---
+    run_id     = uuid.uuid4().hex[:12]
+    created_at = datetime.utcnow().isoformat() + "Z"
+
+    run_record: dict = {
+        "run_id":        run_id,
+        "job_id":        job_id,
+        "source_type":   body.source_type,
+        "package_id":    body.package_id,
+        "prompt_id":     body.prompt_id,
+        "prompt_name":   prompt_name,
+        "prompt_text":   saved_text,
+        "ad_hoc_prompt": ad_hoc,
+        "prompt_mode":   body.prompt_mode,
+        "combined_prompt": combined,
+        "task_type":     task_type,
+        "provider":      provider,
+        "model":         model,
+        "rag_enabled":   False,
+        "tools_allowed": False,
+        "rag_scope":     None,
+        "privacy_level": privacy_level,
+        "output_text":   None,
+        "status":        "running",
+        "error":         None,
+        "created_at":    created_at,
+    }
+
+    run_dir = settings.llm_runs_dir / job_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    run_path = run_dir / f"{run_id}.json"
+    run_path.write_text(json.dumps(run_record, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    try:
+        output = await llm_export_complete(
+            prompt=combined,
+            document=document,
+            provider=provider,
+            model=model,
+            api_key=api_key,
+        )
+        run_record["output_text"] = output
+        run_record["status"]      = "completed"
+        audit_log.log(job_id, "LLM_EXPORT_RUN", {
+            "run_id": run_id, "prompt_id": body.prompt_id,
+            "source_type": body.source_type, "provider": provider, "model": model,
+        })
+    except Exception as exc:
+        run_record["status"] = "failed"
+        run_record["error"]  = str(exc)
+        audit_log.log(job_id, "LLM_EXPORT_FAILED", {"run_id": run_id, "error": str(exc)})
+    finally:
+        run_path.write_text(json.dumps(run_record, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    return {
+        "run_id":      run_record["run_id"],
+        "status":      run_record["status"],
+        "output_text": run_record["output_text"],
+        "error":       run_record["error"],
+        "provider":    provider,
+        "model":       model,
+        "prompt_name": prompt_name,
+        "task_type":   task_type,
+        "created_at":  created_at,
+    }
+
+
+@router.get("/api/llm-export/{job_id}/runs")
+def list_llm_runs(job_id: str):
+    """List previous LLM export runs for a job, newest first."""
+    run_dir = settings.llm_runs_dir / job_id
+    if not run_dir.exists():
+        return {"runs": []}
+    runs = []
+    for path in sorted(run_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            runs.append({
+                "run_id":        data.get("run_id"),
+                "status":        data.get("status"),
+                "prompt_id":     data.get("prompt_id"),
+                "prompt_name":   data.get("prompt_name"),
+                "task_type":     data.get("task_type"),
+                "provider":      data.get("provider"),
+                "model":         data.get("model"),
+                "source_type":   data.get("source_type"),
+                "privacy_level": data.get("privacy_level"),
+                "created_at":    data.get("created_at"),
+                "output_text":   data.get("output_text"),
+                "error":         data.get("error"),
+            })
+        except Exception:
+            continue
+    return {"runs": runs}
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _require_job(job_id: str) -> Job:

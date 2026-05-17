@@ -942,6 +942,116 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
         </div>
       </div>
 
+      <!-- LLM Export section -->
+      <div id="llm-export-pane" style="display:none;border-top:2px solid var(--border);flex-shrink:0">
+        <div style="display:flex;overflow:hidden;min-height:0">
+
+          <!-- Left: form -->
+          <div style="width:320px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Export to LLM</div>
+
+            <!-- Source -->
+            <div class="form-group">
+              <label>Document source</label>
+              <select id="llm-source-type">
+                <option value="reviewed_markdown">Reviewed / normalized markdown (quick)</option>
+                <option value="policy_package">Policy package — prepared.md (audited)</option>
+              </select>
+            </div>
+            <div class="form-group" id="llm-package-row" style="display:none">
+              <label>Policy package</label>
+              <select id="llm-package-select"><option value="">— select package —</option></select>
+            </div>
+
+            <!-- Prompt mode -->
+            <div class="form-group">
+              <label>Prompt mode</label>
+              <select id="llm-prompt-mode">
+                <option value="saved">Saved prompt</option>
+                <option value="ad_hoc">Ad hoc prompt</option>
+                <option value="saved_plus_ad_hoc">Saved prompt + additional instruction</option>
+              </select>
+            </div>
+            <div class="form-group" id="llm-saved-prompt-row">
+              <label>Saved prompt</label>
+              <select id="llm-prompt-select"><option value="">Loading…</option></select>
+            </div>
+            <div class="form-group" id="llm-adhoc-row" style="display:none">
+              <label>Prompt / additional instruction</label>
+              <textarea id="llm-adhoc-textarea" rows="4"
+                style="background:var(--bg);color:var(--text);border:1px solid var(--border);
+                       border-radius:7px;padding:8px 10px;font-size:12px;resize:vertical;
+                       line-height:1.6;width:100%;outline:none"
+                placeholder="Enter your instruction…"></textarea>
+            </div>
+
+            <!-- Provider / model -->
+            <div class="form-group">
+              <label>Provider</label>
+              <select id="llm-provider">
+                <option value="openrouter">OpenRouter</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="google">Google (direct)</option>
+                <option value="localhost">Localhost</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Model</label>
+              <input id="llm-model" list="llm-model-list" autocomplete="off"
+                     placeholder="Server default or custom model ID"
+                     style="background:var(--bg);color:var(--text);border:1px solid var(--border);
+                            border-radius:7px;padding:7px 8px;font-size:12px;outline:none;width:100%">
+              <datalist id="llm-model-list"></datalist>
+            </div>
+            <div class="form-group">
+              <label>API key <span style="font-weight:400;color:var(--muted)">(optional — uses server default)</span></label>
+              <input id="llm-api-key" type="password" autocomplete="off"
+                     placeholder="sk-… or leave blank"
+                     style="background:var(--bg);color:var(--text);border:1px solid var(--border);
+                            border-radius:7px;padding:7px 8px;font-size:12px;outline:none;width:100%">
+            </div>
+
+            <button class="btn btn-primary btn-block" id="llm-run-btn">▶ Run with LLM</button>
+            <div id="llm-run-error" style="display:none;font-size:12px;color:var(--danger);line-height:1.5"></div>
+
+            <div style="font-size:10px;color:var(--muted);line-height:1.6;border-top:1px solid var(--border);padding-top:10px">
+              Only the approved pseudonymized markdown is sent — no PHI, no token mapping.<br>
+              RAG/tool use will be available in a later version.
+            </div>
+          </div>
+
+          <!-- Right: output + history -->
+          <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+            <div id="llm-output-area" style="flex:1;overflow-y:auto;padding:16px 20px">
+              <div id="llm-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:8px;font-size:13px">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                Select a prompt and model, then click Run
+              </div>
+              <div id="llm-loading" style="display:none;text-align:center;padding:40px 0">
+                <div class="spinner" style="margin:0 auto 12px"></div>
+                <div style="font-size:13px;color:var(--muted)">Running LLM…</div>
+              </div>
+              <div id="llm-result" style="display:none">
+                <div style="font-size:11px;color:var(--muted);margin-bottom:8px" id="llm-result-meta"></div>
+                <div id="llm-result-text"
+                  style="font-size:13px;line-height:1.8;white-space:pre-wrap;background:var(--surface);
+                         border:1px solid var(--border);border-radius:8px;padding:16px 18px"></div>
+              </div>
+            </div>
+
+            <!-- Run history -->
+            <div id="llm-history" style="flex-shrink:0;border-top:1px solid var(--border);max-height:200px;overflow-y:auto;display:none">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);padding:10px 16px 6px">Previous runs</div>
+              <div id="llm-history-list" style="padding:0 12px 10px"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       <div class="export-bar" id="export-bar" style="display:none">
         <span id="export-bar-label" style="font-size:13px;color:var(--muted)">Exports ready:</span>
         <div class="dl-links" id="dl-links"></div>
@@ -1229,13 +1339,15 @@ function setViewMode(mode, j) {
   const ocrPane      = document.getElementById("ocr-pane");
   const policyPane   = document.getElementById("policy-pane");
   const mappingPane  = document.getElementById("mapping-pane");
-  const inlineWrap   = document.getElementById("ocr-inline-wrap");
+  const inlineWrap    = document.getElementById("ocr-inline-wrap");
+  const llmExportPane = document.getElementById("llm-export-pane");
 
-  entityBody.style.display  = "none";
-  ocrPane.style.display     = "none";
-  policyPane.style.display  = "none";
-  mappingPane.style.display = "none";
-  inlineWrap.style.display  = "none";
+  entityBody.style.display    = "none";
+  ocrPane.style.display       = "none";
+  policyPane.style.display    = "none";
+  mappingPane.style.display   = "none";
+  inlineWrap.style.display    = "none";
+  llmExportPane.style.display = "none";
 
   if (mode === "ocr") {
     ocrPane.style.display = "flex";
@@ -1244,7 +1356,9 @@ function setViewMode(mode, j) {
   } else if (mode === "policy") {
     policyPane.style.display = "flex";
     policyPane.style.flexDirection = "column";
+    llmExportPane.style.display = "block";
     initPolicyPane(j);
+    initLLMExportPane(j);
   } else if (mode === "mapping") {
     mappingPane.style.display = "flex";
     mappingPane.style.flexDirection = "column";
@@ -2210,6 +2324,181 @@ document.getElementById("btn-inline-approve-ocr").addEventListener("click", asyn
     showToast("OCR approved — ready for export");
   } catch(e) { showToast(e.message, "error"); }
 });
+
+// ── LLM Export panel ──────────────────────────────────────
+let _llmPrompts = [];
+let _llmPromptsLoaded = false;
+
+async function initLLMExportPane(j) {
+  // Load prompt list once (prompts are static — no need to reload per job)
+  if (!_llmPromptsLoaded) {
+    try {
+      const res = await api("/api/llm-export/prompts");
+      _llmPrompts = res.prompts || [];
+    } catch(_) { _llmPrompts = []; }
+    _llmPromptsLoaded = true;
+    const sel = document.getElementById("llm-prompt-select");
+    if (_llmPrompts.length) {
+      sel.innerHTML = _llmPrompts.map(p =>
+        `<option value="${p.id}">${escHtml(p.title)}</option>`
+      ).join("");
+    } else {
+      sel.innerHTML = `<option value="">No saved prompts found</option>`;
+    }
+  }
+
+  // Populate package dropdown from existing packages for this job
+  const pkgSel = document.getElementById("llm-package-select");
+  try {
+    const res = await api(`/api/jobs/${j.id}/packages`);
+    const pkgs = res.packages || [];
+    pkgSel.innerHTML = pkgs.length
+      ? `<option value="">— select package —</option>` + pkgs.map(pkg => {
+          const label = `${pkg.profile} · ${pkg.recommended_action} · ${fmtTime(pkg.created_at)}`;
+          return `<option value="${pkg.package_id}">${escHtml(label)}</option>`;
+        }).join("")
+      : `<option value="">No packages yet — run policy engine first</option>`;
+  } catch(_) { pkgSel.innerHTML = `<option value="">Failed to load packages</option>`; }
+
+  // Reset output area
+  document.getElementById("llm-empty").style.display = "flex";
+  document.getElementById("llm-loading").style.display = "none";
+  document.getElementById("llm-result").style.display = "none";
+  document.getElementById("llm-run-error").style.display = "none";
+
+  await loadLLMHistory(j.id);
+}
+
+// Source type toggle
+document.getElementById("llm-source-type").addEventListener("change", function() {
+  document.getElementById("llm-package-row").style.display =
+    this.value === "policy_package" ? "flex" : "none";
+});
+
+// Prompt mode toggle
+document.getElementById("llm-prompt-mode").addEventListener("change", function() {
+  const savedRow = document.getElementById("llm-saved-prompt-row");
+  const adhocRow = document.getElementById("llm-adhoc-row");
+  savedRow.style.display = (this.value === "ad_hoc") ? "none" : "flex";
+  adhocRow.style.display = (this.value === "saved")  ? "none" : "flex";
+});
+
+// Provider → populate model list
+document.getElementById("llm-provider").addEventListener("change", async function() {
+  const dl = document.getElementById("llm-model-list");
+  dl.innerHTML = "";
+  try {
+    const res = await api(`/api/models?provider=${encodeURIComponent(this.value)}`);
+    (res.models || []).forEach(m => {
+      const opt = document.createElement("option");
+      opt.value = m; dl.appendChild(opt);
+    });
+  } catch(_) {}
+});
+
+// Run button
+document.getElementById("llm-run-btn").addEventListener("click", async () => {
+  if (!currentJob) return;
+  const errEl = document.getElementById("llm-run-error");
+  errEl.style.display = "none";
+
+  const promptMode = document.getElementById("llm-prompt-mode").value;
+  const promptId   = document.getElementById("llm-prompt-select").value || null;
+  const adhoc      = document.getElementById("llm-adhoc-textarea").value.trim();
+  const sourceType = document.getElementById("llm-source-type").value;
+  const packageId  = document.getElementById("llm-package-select").value || null;
+  const provider   = document.getElementById("llm-provider").value;
+  const model      = document.getElementById("llm-model").value.trim() || null;
+  const apiKey     = document.getElementById("llm-api-key").value.trim() || null;
+
+  if (promptMode === "saved" && !promptId) {
+    errEl.textContent = "Select a saved prompt."; errEl.style.display = "block"; return;
+  }
+  if (promptMode === "ad_hoc" && !adhoc) {
+    errEl.textContent = "Enter a prompt in the ad hoc field."; errEl.style.display = "block"; return;
+  }
+  if (sourceType === "policy_package" && !packageId) {
+    errEl.textContent = "Select a policy package."; errEl.style.display = "block"; return;
+  }
+
+  document.getElementById("llm-empty").style.display = "none";
+  document.getElementById("llm-result").style.display = "none";
+  document.getElementById("llm-loading").style.display = "block";
+  document.getElementById("llm-run-btn").disabled = true;
+
+  try {
+    const run = await api(`/api/llm-export/${currentJob.id}/run`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        prompt_mode: promptMode,
+        prompt_id:   promptId,
+        ad_hoc_prompt: adhoc,
+        source_type: sourceType,
+        package_id:  packageId,
+        provider,
+        model,
+        api_key: apiKey,
+      }),
+    });
+    renderLLMRun(run);
+    await loadLLMHistory(currentJob.id);
+  } catch(e) {
+    document.getElementById("llm-loading").style.display = "none";
+    document.getElementById("llm-empty").style.display = "flex";
+    errEl.textContent = e.message || "LLM run failed";
+    errEl.style.display = "block";
+  } finally {
+    document.getElementById("llm-run-btn").disabled = false;
+  }
+});
+
+function renderLLMRun(run) {
+  document.getElementById("llm-loading").style.display = "none";
+  const resultEl = document.getElementById("llm-result");
+  const metaEl   = document.getElementById("llm-result-meta");
+  const textEl   = document.getElementById("llm-result-text");
+
+  if (run.status === "failed") {
+    metaEl.textContent = `Failed · ${run.model}`;
+    textEl.style.color = "var(--danger)";
+    textEl.textContent = run.error || "Unknown error";
+  } else {
+    metaEl.textContent = `${run.prompt_name || "Ad hoc"} · ${run.model} · ${fmtTime(run.created_at)}`;
+    textEl.style.color = "var(--text)";
+    textEl.textContent = run.output_text || "";
+  }
+  resultEl.style.display = "block";
+}
+
+async function loadLLMHistory(jobId) {
+  try {
+    const res = await api(`/api/llm-export/${jobId}/runs`);
+    const runs = res.runs || [];
+    const histEl = document.getElementById("llm-history");
+    const listEl = document.getElementById("llm-history-list");
+    if (!runs.length) { histEl.style.display = "none"; return; }
+    histEl.style.display = "block";
+    listEl.innerHTML = runs.map(r => `
+      <div style="border:1px solid var(--border);border-radius:7px;padding:8px 10px;margin-bottom:6px;cursor:pointer"
+           onclick="expandLLMRun(${JSON.stringify(JSON.stringify(r))})">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px">
+          <strong>${escHtml(r.prompt_name || r.prompt_id || "ad hoc")}</strong>
+          <span style="color:var(--muted)">${escHtml(r.model || "")}</span>
+          <span class="badge badge-${r.status === "completed" ? "done" : "failed"}">${r.status}</span>
+          <span style="color:var(--muted);margin-left:auto">${fmtTime(r.created_at)}</span>
+        </div>
+        ${r.output_text ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">${escHtml(r.output_text.slice(0, 120))}…</div>` : ""}
+      </div>
+    `).join("");
+  } catch(_) {}
+}
+
+function expandLLMRun(runJson) {
+  const run = JSON.parse(runJson);
+  renderLLMRun(run);
+  document.getElementById("llm-output-area").scrollTo({top: 0, behavior: "smooth"});
+}
 
 // ── Init ──────────────────────────────────────────────────
 (async () => {

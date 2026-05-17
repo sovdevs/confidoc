@@ -75,15 +75,19 @@ class Settings:
     mappings_dir: Path = DATA / "mappings"       # encrypted per-job token maps
     zone1_previews_dir: Path = DATA / "zone1" / "previews"  # per-job page PNGs
     prepared_packages_dir: Path = DATA / "prepared_packages"  # Zone 2 export packages
+    llm_runs_dir: Path = DATA / "llm_runs"                   # LLM export run artifacts
     audit_log: Path = DATA / "audit.jsonl"
     approved_terms: Path = DATA / "approved_terms.jsonl"
+
+    # Prompt files are static app assets (committed to git), not user data
+    llm_export_prompts_dir: Path = ROOT / "data" / "llm_export_prompts"
 
     def ensure_dirs(self) -> None:
         dirs = [
             self.input_dir, self.extracted_dir, self.anonymized_dir,
             self.reviewed_dir, self.normalized_dir, self.exported_dir,
             self.final_dir, self.jobs_dir, self.mappings_dir,
-            self.zone1_previews_dir, self.prepared_packages_dir,
+            self.zone1_previews_dir, self.prepared_packages_dir, self.llm_runs_dir,
         ]
         if self.demo_capture:
             dirs += [self.demo_runs_dir]
