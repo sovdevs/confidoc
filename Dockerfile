@@ -18,6 +18,9 @@ COPY profiles/ profiles/
 COPY data/demo/ data/demo/
 COPY data/demo_runs/ data/demo_runs/
 
+# Saved LLM export prompts (static app assets — no user data)
+COPY data/llm_export_prompts/ data/llm_export_prompts/
+
 # Render mounts a persistent disk at /data via the DATA_DIR env var
 ENV DATA_DIR=/data
 ENV HOST=0.0.0.0
