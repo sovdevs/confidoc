@@ -1580,7 +1580,30 @@ function renderActions(j) {
     html = `<span style="font-size:12px;color:var(--danger)">✗ Failed</span>`;
   }
 
+  // Append "Sync to server" for SFTP gateway jobs
+  const isSftpGw = j.ingest_source_type === "sftp_gateway" && j.ingest_source_id;
+  const canSync  = isSftpGw && !["pending","processing","extracting"].includes(j.status);
+  if (canSync) {
+    html += `<button class="btn btn-ghost btn-sm" id="btn-sftp-sync" title="Push all exports to SFTP server">↑ Sync to server</button>`;
+  }
+
   el.innerHTML = html;
+
+  el.querySelector("#btn-sftp-sync")?.addEventListener("click", async () => {
+    const btn = el.querySelector("#btn-sftp-sync");
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = "Syncing…";
+    try {
+      const res = await api(
+        `/api/gateway/sftp/${j.ingest_source_id}/push-exports/${j.id}`,
+        {method: "POST"},
+      );
+      showToast(res.pushed?.length
+        ? `Synced ${res.pushed.length} file(s) to ${res.remote_dir}`
+        : (res.message || "Nothing to sync yet"));
+    } catch(e) { showToast(e.message || "Sync failed", "error"); }
+    finally { btn.disabled = false; btn.textContent = orig; }
+  });
 
   el.querySelector("#btn-redetect")?.addEventListener("click", redetect);
   el.querySelector("#btn-approve-all")?.addEventListener("click", approveAll);

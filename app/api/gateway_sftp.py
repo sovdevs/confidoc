@@ -131,3 +131,10 @@ async def _run_sftp_batch(source_id: str, filenames: list[str]) -> None:
 def sftp_batch_status(source_id: str):
     gw = _make_gw(source_id)
     return {"batch": gw.batch_status()}
+
+
+@router.post("/api/gateway/sftp/{source_id}/push-exports/{job_id}")
+def sftp_push_exports(source_id: str, job_id: str):
+    """Push all export artifacts for a job to remote exports/{job_id}/."""
+    gw = _make_gw(source_id)
+    return gw.push_job_exports(job_id)

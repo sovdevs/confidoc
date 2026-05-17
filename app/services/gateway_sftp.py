@@ -236,6 +236,92 @@ class SFTPGateway:
         except Exception:
             return None
 
+    # ── Export push ───────────────────────────────────────────────────────────
+
+    def push_job_exports(self, job_id: str) -> dict:
+        """Upload all available export artifacts for a job to remote exports/{job_id}/.
+
+        Collects: reviewed_md, normalized_md, all policy packages, and LLM runs.
+        Safe to call multiple times — re-uploads the latest versions.
+        """
+        job = job_store.load(job_id)
+        if not job:
+            return {"ok": False, "error": "Job not found"}
+
+        files_to_push: list[Path] = []
+
+        # Pseudonymized / normalized markdown
+        for attr in ("reviewed_md", "normalized_md"):
+            rel = getattr(job, attr, None)
+            if rel:
+                p = settings.jobs_dir.parent / rel
+                if p.exists():
+                    files_to_push.append(p)
+
+        # Policy engine packages
+        pkg_base = settings.prepared_packages_dir
+        if pkg_base.exists():
+            for pkg_dir in pkg_base.iterdir():
+                if not pkg_dir.is_dir():
+                    continue
+                manifest = pkg_dir / "manifest.json"
+                if not manifest.exists():
+                    continue
+                try:
+                    meta = json.loads(manifest.read_text(encoding="utf-8"))
+                    if meta.get("job_id") != job_id:
+                        continue
+                except Exception:
+                    continue
+                # Push Zone-2-safe files only — never token_map.enc
+                for name in ("prepared.md", "manifest.json", "risk_report.json",
+                              "usefulness_report.json", "transformation_log.json"):
+                    f = pkg_dir / name
+                    if f.exists():
+                        files_to_push.append(f)
+                # Supplementary exports (CSV, TMX, DOCX, XLIFF)
+                for f in pkg_dir.glob(f"{Path(job.filename).stem}.*"):
+                    if f.suffix.lower() not in (".enc", ".zip"):
+                        files_to_push.append(f)
+
+        # LLM export runs
+        llm_dir = settings.llm_runs_dir / job_id
+        if llm_dir.exists():
+            for f in llm_dir.glob("*.json"):
+                files_to_push.append(f)
+
+        if not files_to_push:
+            return {"ok": True, "pushed": 0, "message": "No export artifacts found yet"}
+
+        remote_dir = f"{self.r_exports}/{job_id}"
+        pushed: list[str] = []
+        errors: list[str] = []
+
+        try:
+            client, sftp = self._connect()
+            self._mkdir(sftp, self.r_exports)
+            self._mkdir(sftp, remote_dir)
+            for local_file in files_to_push:
+                try:
+                    sftp.put(str(local_file), f"{remote_dir}/{local_file.name}")
+                    pushed.append(local_file.name)
+                except Exception as exc:
+                    errors.append(f"{local_file.name}: {_safe_err(exc)}")
+            sftp.close(); client.close()
+        except Exception as exc:
+            return {"ok": False, "error": f"Connection failed: {_safe_err(exc)}"}
+
+        self._log("exports_pushed", job.filename, job_id=job_id,
+                  remote_dir=remote_dir, pushed=pushed, errors=errors)
+
+        return {
+            "ok":        True,
+            "job_id":    job_id,
+            "remote_dir": remote_dir,
+            "pushed":    pushed,
+            "errors":    errors,
+        }
+
     # ── Scan ──────────────────────────────────────────────────────────────────
 
     def scan_incoming(self) -> list[dict]:

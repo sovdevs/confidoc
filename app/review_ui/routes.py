@@ -324,6 +324,9 @@ def approve_all(job_id: str):
     except Exception:
         pass  # non-fatal — reviewed_md will be created on first export instead
 
+    # For SFTP gateway jobs, push export artifacts back to the remote server.
+    _sftp_gateway_push(job_id)
+
     return {"ok": True, "count": len(updated)}
 
 
@@ -1023,6 +1026,9 @@ def policy_prepare(body: PolicyPrepareBody):
         "recommended_action":  pkg.manifest.get("recommended_action", ""),
     })
 
+    # For SFTP gateway jobs, push the new package back to the remote server.
+    _sftp_gateway_push(job.id)
+
     return _safe_policy_response(pkg)
 
 
@@ -1516,6 +1522,22 @@ def list_llm_runs(job_id: str):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _sftp_gateway_push(job_id: str) -> None:
+    """Fire-and-forget: push export artifacts to the SFTP gateway server if applicable."""
+    try:
+        job = job_store.load(job_id)
+        if not job or job.ingest_source_type != "sftp_gateway":
+            return
+        from app.services.source_config_loader import get_source_by_id
+        from app.services.gateway_sftp import SFTPGateway
+        cfg = get_source_by_id(job.ingest_source_id)
+        if not cfg or not cfg.get("gateway_base"):
+            return
+        SFTPGateway(cfg).push_job_exports(job_id)
+    except Exception:
+        pass  # non-fatal — export is still available locally
+
 
 def _require_job(job_id: str) -> Job:
     job = job_store.load(job_id)

@@ -1,0 +1,5 @@
+{"event": "detected", "filename": "Killen Karina_Case02573384_20231120.pdf", "job_id": null, "timestamp": "2026-05-17T17:47:53.970741+00:00"}
+{"event": "detected", "filename": "Killen Karina_Case02573384_20231120.pdf", "job_id": null, "timestamp": "2026-05-17T17:48:31.313562+00:00"}
+{"event": "imported", "filename": "Killen Karina_Case02573384_20231120.pdf", "job_id": "92b3e8f0329b44c5b2649c35c7510bde", "timestamp": "2026-05-17T17:48:39.684436+00:00"}
+{"event": "processing_started", "filename": "Killen Karina_Case02573384_20231120.pdf", "job_id": "92b3e8f0329b44c5b2649c35c7510bde", "timestamp": "2026-05-17T17:48:50.941948+00:00"}
+{"event": "waiting_for_review", "filename": "Killen Karina_Case02573384_20231120.pdf", "job_id": "92b3e8f0329b44c5b2649c35c7510bde", "timestamp": "2026-05-17T17:48:50.942342+00:00"}
