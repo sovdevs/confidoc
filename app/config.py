@@ -78,6 +78,10 @@ class Settings:
     llm_runs_dir: Path = DATA / "llm_runs"                   # LLM export run artifacts
     source_configs_dir: Path = DATA / "source_configs"       # sources.json (operator-managed)
     ingest_registry_path: Path = DATA / "zone1" / "ingest_registry.jsonl"
+    gateway_local_dir: Path = DATA / "gateway" / "local"
+    auto_approve_gateway_jobs: bool = (
+        os.getenv("AUTO_APPROVE_GATEWAY_JOBS", "false").lower() == "true"
+    )
     audit_log: Path = DATA / "audit.jsonl"
     approved_terms: Path = DATA / "approved_terms.jsonl"
 
@@ -92,6 +96,7 @@ class Settings:
             self.zone1_previews_dir, self.prepared_packages_dir, self.llm_runs_dir,
             self.source_configs_dir,
             self.ingest_registry_path.parent,  # data/zone1/
+            self.gateway_local_dir,
         ]
         if self.demo_capture:
             dirs += [self.demo_runs_dir]

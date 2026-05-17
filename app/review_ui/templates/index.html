@@ -575,33 +575,77 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
           <!-- Server source panel -->
           <div id="server-source-panel" style="display:none;margin-top:4px">
-            <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px;padding:8px 10px;background:#12162a;border-radius:7px;border:1px solid var(--border)">
-              Pull source documents from a trusted server into the secure Zone 1 store.
-              Files imported here are treated like manually uploaded documents and are not sent to any LLM during import.
+
+            <!-- Sub-tabs: Local Folder | Remote Sources -->
+            <div style="display:flex;gap:4px;margin-bottom:10px">
+              <button class="view-tab active" id="srv-sub-local">Local Folder</button>
+              <button class="view-tab" id="srv-sub-remote">Remote Sources</button>
             </div>
 
-            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-              <select id="server-source-select" style="flex:1;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px">
-                <option value="">— no sources configured —</option>
-              </select>
-              <button class="btn btn-ghost btn-sm" id="btn-server-test">Test</button>
-              <button class="btn btn-ghost btn-sm" id="btn-server-list">List Files</button>
-            </div>
-
-            <div id="server-test-msg" style="display:none;font-size:12px;margin-bottom:8px;padding:5px 8px;border-radius:5px"></div>
-
-            <div id="server-file-wrap" style="display:none">
-              <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-                <span id="server-file-summary" style="font-size:12px;color:var(--muted);flex:1"></span>
-                <button class="btn btn-ghost btn-sm" id="btn-server-refresh">↺ Refresh</button>
-                <button class="btn btn-ghost btn-sm" id="btn-server-pull-selected">↓ Pull Selected</button>
-                <button class="btn btn-primary btn-sm" id="btn-server-pull-unseen">↓ Pull Unseen</button>
+            <!-- ── Local Folder panel ── -->
+            <div id="srv-panel-local">
+              <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px;padding:8px 10px;background:#12162a;border-radius:7px;border:1px solid var(--border)">
+                Drop files into <code style="background:var(--border);padding:1px 4px;border-radius:3px">data/gateway/local/incoming/</code>, then Scan and Process.
+                Files are never sent to an LLM during import.
               </div>
-              <div id="server-pull-msg" style="display:none;font-size:12px;margin-bottom:6px;padding:5px 8px;border-radius:5px"></div>
-              <div id="server-file-table" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;font-size:11px">
-                <!-- rows inserted by JS -->
+
+              <!-- Status bar -->
+              <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+                <span id="gw-badge-incoming" style="font-size:11px;background:var(--border);border-radius:10px;padding:2px 9px">Incoming: —</span>
+                <span id="gw-badge-processing" style="font-size:11px;background:var(--border);border-radius:10px;padding:2px 9px">Processing: —</span>
+                <span id="gw-badge-processed" style="font-size:11px;background:#0d2018;color:var(--success);border-radius:10px;padding:2px 9px">Processed: —</span>
+                <span id="gw-badge-failed" style="font-size:11px;background:#2a1010;color:var(--danger);border-radius:10px;padding:2px 9px">Failed: —</span>
+                <span id="gw-mode-badge" style="font-size:10px;font-weight:700;letter-spacing:.5px;border-radius:10px;padding:2px 9px;margin-left:auto"></span>
+              </div>
+
+              <!-- Action buttons -->
+              <div style="display:flex;gap:6px;margin-bottom:8px">
+                <button class="btn btn-ghost btn-sm" id="btn-gw-scan">⟳ Scan</button>
+                <button class="btn btn-ghost btn-sm" id="btn-gw-process-next" disabled>▶ Process Next</button>
+                <button class="btn btn-primary btn-sm" id="btn-gw-process-all" disabled>▶▶ Process All</button>
+              </div>
+
+              <div id="gw-action-msg" style="display:none;font-size:12px;margin-bottom:8px;padding:5px 8px;border-radius:5px"></div>
+
+              <!-- Incoming file list -->
+              <div id="gw-file-list" style="display:none;border:1px solid var(--border);border-radius:7px;max-height:160px;overflow-y:auto;margin-bottom:8px;font-size:11px"></div>
+
+              <!-- Recent events -->
+              <div id="gw-events-wrap" style="display:none">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:4px">Recent events</div>
+                <div id="gw-events" style="max-height:140px;overflow-y:auto;font-size:11px;font-family:monospace;color:var(--muted);line-height:1.6"></div>
               </div>
             </div>
+
+            <!-- ── Remote Sources panel ── -->
+            <div id="srv-panel-remote" style="display:none">
+              <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px;padding:8px 10px;background:#12162a;border-radius:7px;border:1px solid var(--border)">
+                Pull source documents from a trusted remote server into Zone 1.
+                Credentials are resolved server-side — never sent to the browser.
+              </div>
+
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+                <select id="server-source-select" style="flex:1;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px">
+                  <option value="">— no sources configured —</option>
+                </select>
+                <button class="btn btn-ghost btn-sm" id="btn-server-test">Test</button>
+                <button class="btn btn-ghost btn-sm" id="btn-server-list">List Files</button>
+              </div>
+
+              <div id="server-test-msg" style="display:none;font-size:12px;margin-bottom:8px;padding:5px 8px;border-radius:5px"></div>
+
+              <div id="server-file-wrap" style="display:none">
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                  <span id="server-file-summary" style="font-size:12px;color:var(--muted);flex:1"></span>
+                  <button class="btn btn-ghost btn-sm" id="btn-server-refresh">↺ Refresh</button>
+                  <button class="btn btn-ghost btn-sm" id="btn-server-pull-selected">↓ Pull Selected</button>
+                  <button class="btn btn-primary btn-sm" id="btn-server-pull-unseen">↓ Pull Unseen</button>
+                </div>
+                <div id="server-pull-msg" style="display:none;font-size:12px;margin-bottom:6px;padding:5px 8px;border-radius:5px"></div>
+                <div id="server-file-table" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;font-size:11px"></div>
+              </div>
+            </div>
+
           </div>
 
           <!-- Selected file indicator (shown when any source is chosen) -->
@@ -2384,6 +2428,146 @@ document.getElementById("btn-inline-approve-ocr").addEventListener("click", asyn
   } catch(e) { showToast(e.message, "error"); }
 });
 
+// ── Server tab sub-tabs ───────────────────────────────────
+document.getElementById("srv-sub-local")?.addEventListener("click", function() {
+  document.querySelectorAll("#server-source-panel .view-tab").forEach(t => t.classList.remove("active"));
+  this.classList.add("active");
+  document.getElementById("srv-panel-local").style.display = "block";
+  document.getElementById("srv-panel-remote").style.display = "none";
+});
+document.getElementById("srv-sub-remote")?.addEventListener("click", function() {
+  document.querySelectorAll("#server-source-panel .view-tab").forEach(t => t.classList.remove("active"));
+  this.classList.add("active");
+  document.getElementById("srv-panel-local").style.display = "none";
+  document.getElementById("srv-panel-remote").style.display = "block";
+});
+
+// ── Gateway local folder ──────────────────────────────────
+async function refreshGatewayStatus() {
+  try {
+    const res = await api("/api/gateway/local/status");
+    const c   = res.counts || {};
+    document.getElementById("gw-badge-incoming").textContent   = `Incoming: ${c.incoming ?? 0}`;
+    document.getElementById("gw-badge-processing").textContent = `Processing: ${c.processing ?? 0}`;
+    document.getElementById("gw-badge-processed").textContent  = `Processed: ${c.processed ?? 0}`;
+    document.getElementById("gw-badge-failed").textContent     = `Failed: ${c.failed ?? 0}`;
+
+    const modeBadge = document.getElementById("gw-mode-badge");
+    if (res.auto_approve) {
+      modeBadge.textContent = "AUTO";
+      modeBadge.style.background = "#0f2a1d"; modeBadge.style.color = "var(--success)";
+    } else {
+      modeBadge.textContent = "MANUAL REVIEW";
+      modeBadge.style.background = "#0f1f40"; modeBadge.style.color = "#5b7cf6";
+    }
+
+    const events = res.recent_events || [];
+    const evWrap = document.getElementById("gw-events-wrap");
+    const evEl   = document.getElementById("gw-events");
+    if (events.length) {
+      evWrap.style.display = "block";
+      evEl.innerHTML = events.map(e => {
+        const ts  = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : "";
+        const jid = e.job_id ? ` [${e.job_id.slice(0,8)}]` : "";
+        return `<div>${ts} <span style="color:var(--text)">${escHtml(e.event)}</span>${jid} ${escHtml(e.filename || "")}</div>`;
+      }).join("");
+    } else {
+      evWrap.style.display = "none";
+    }
+  } catch(_) {}
+}
+
+document.getElementById("btn-gw-scan")?.addEventListener("click", async () => {
+  _gwMsg("Scanning incoming/…", "info");
+  try {
+    const res = await api("/api/gateway/local/scan", {method: "POST"});
+    const files = res.files || [];
+    const fileList = document.getElementById("gw-file-list");
+
+    const actionable = files.filter(f => f.supported && f.requires_ocr);
+    document.getElementById("btn-gw-process-next").disabled = !actionable.length;
+    document.getElementById("btn-gw-process-all").disabled  = !actionable.length;
+
+    if (!files.length) {
+      _gwMsg("No files found in incoming/", "info");
+      fileList.style.display = "none";
+    } else {
+      _gwMsg(`${res.count} file(s) found — ${res.actionable} ready to process`, "ok");
+      fileList.style.display = "block";
+      fileList.innerHTML = files.map(f => `
+        <div style="display:flex;gap:8px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--border)">
+          <span style="font-size:11px;color:${f.supported ? (f.requires_ocr ? "var(--success)" : "var(--warning)") : "var(--danger)"}">
+            ${f.supported ? (f.requires_ocr ? "✓" : "~") : "✗"}
+          </span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(f.filename)}</span>
+          <span style="color:var(--muted)">${fmtBytes(f.size_bytes)}</span>
+          <span style="color:var(--muted)">${escHtml(f.extension)}</span>
+        </div>
+      `).join("");
+    }
+    await refreshGatewayStatus();
+  } catch(e) {
+    _gwMsg(e.message || "Scan failed", "error");
+  }
+});
+
+document.getElementById("btn-gw-process-next")?.addEventListener("click", async () => {
+  document.getElementById("btn-gw-process-next").disabled = true;
+  document.getElementById("btn-gw-process-all").disabled  = true;
+  _gwMsg("Processing next file…", "info");
+  try {
+    const res = await api("/api/gateway/local/process-next", {method: "POST"});
+    _gwRunResult([res]);
+    await loadJobs();
+    await refreshGatewayStatus();
+  } catch(e) {
+    _gwMsg(e.message || "Processing failed", "error");
+    document.getElementById("btn-gw-process-next").disabled = false;
+    document.getElementById("btn-gw-process-all").disabled  = false;
+  }
+});
+
+document.getElementById("btn-gw-process-all")?.addEventListener("click", async () => {
+  document.getElementById("btn-gw-process-next").disabled = true;
+  document.getElementById("btn-gw-process-all").disabled  = true;
+  _gwMsg("Processing all files… (this may take a while)", "info");
+  try {
+    const res = await api("/api/gateway/local/process-all", {method: "POST"});
+    _gwRunResult(res.results || []);
+    await loadJobs();
+    await refreshGatewayStatus();
+  } catch(e) {
+    _gwMsg(e.message || "Processing failed", "error");
+    document.getElementById("btn-gw-process-next").disabled = false;
+    document.getElementById("btn-gw-process-all").disabled  = false;
+  }
+});
+
+function _gwRunResult(results) {
+  const ok    = results.filter(r => r.ok).length;
+  const fail  = results.length - ok;
+  const parts = [`${ok} completed`];
+  if (fail) parts.push(`${fail} failed`);
+
+  const exports = results.filter(r => r.export_dir).map(r =>
+    `<div style="margin-top:3px">↳ <code style="font-size:10px">${escHtml(r.export_dir)}</code></div>`
+  ).join("");
+
+  const msgEl = document.getElementById("gw-action-msg");
+  msgEl.style.display    = "block";
+  msgEl.style.color      = fail ? "var(--warning)" : "var(--success)";
+  msgEl.style.background = fail ? "#2a1800" : "#0d2018";
+  msgEl.innerHTML        = parts.join(" · ") + exports;
+}
+
+function _gwMsg(msg, type) {
+  const el = document.getElementById("gw-action-msg");
+  el.style.display    = msg ? "block" : "none";
+  el.textContent      = msg;
+  el.style.color      = type === "error" ? "var(--danger)" : type === "ok" ? "var(--success)" : "var(--muted)";
+  el.style.background = type === "error" ? "#2a1010" : type === "ok" ? "#0d2018" : "#12162a";
+}
+
 // ── Process imported job ──────────────────────────────────
 async function processImportedJob(jobId, btn) {
   const orig = btn.textContent;
@@ -3346,6 +3530,7 @@ document.getElementById("src-tab-server")?.addEventListener("click", async funct
   document.getElementById("server-source-panel").style.display = "block";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "none";
+  await refreshGatewayStatus();
   await initServerTab();
 });
 

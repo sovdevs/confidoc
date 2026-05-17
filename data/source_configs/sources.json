@@ -1,0 +1,12 @@
+{
+  "id": "demo_secure_sftp",
+  "label": "Secure clinic SFTP intake",
+  "type": "sftp",
+  "enabled": true,
+  "host": "www.",
+  "port": 22,
+  "username_env": "CONFIDOC_SFTP_USER",
+  "private_key_path_env": "CONFIDOC_SFTP_KEY_PATH",
+  "remote_path": "/home/confidoc/incoming",
+  "filename_patterns": ["*.pdf", "*.docx"]
+}
