@@ -13,6 +13,8 @@ from app.config import settings
 
 
 class JobStatus(str, Enum):
+    imported = "imported"        # pulled from server source; awaiting explicit user action
+    processing = "processing"    # user triggered processing; pipeline starting
     pending = "pending"          # uploaded, not yet processed
     extracting = "extracting"    # pdf2md running
     reviewing = "reviewing"      # awaiting HITL anonymization review
@@ -52,6 +54,12 @@ class Job(BaseModel):
     exported_tmx: Optional[str] = None
     exported_csv: Optional[str] = None
     mapping_path: Optional[str] = None   # data/mappings/   — encrypted token map
+
+    # Server ingest provenance (set for imported jobs only)
+    ingest_source_id: Optional[str] = None
+    ingest_source_type: Optional[str] = None
+    ingest_remote_path: Optional[str] = None
+    requires_ocr: bool = True           # False for docx/txt/md — skip OCR pipeline
 
     # OCR extraction model used for this job (may differ from config defaults)
     pdf_provider: Optional[str] = None

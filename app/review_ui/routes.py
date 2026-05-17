@@ -1298,6 +1298,48 @@ def demo_run_files(demo_run_id: str):
     return {"demo_run_id": demo_run_id, "meta": meta, "stages": stages}
 
 
+# ── Server ingest — Process imported job ─────────────────────────────────────
+
+@router.post("/api/jobs/{job_id}/process")
+async def process_imported_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    pdf_provider: str = Form(""),
+    pdf_model: str = Form(""),
+    pdf_api_key: str = Form(""),
+):
+    """Transition an imported job to processing and start the ingest pipeline.
+
+    Only valid for jobs with status='imported' whose file is a PDF (requires_ocr=True).
+    Non-PDF imported jobs must wait for future extraction support.
+    """
+    job = _require_job(job_id)
+    if job.status != JobStatus.imported:
+        raise HTTPException(400, f"Job status is '{job.status}' — only 'imported' jobs can be processed")
+    if not job.requires_ocr:
+        raise HTTPException(400, "Non-PDF extraction is not yet supported. "
+                            "This file was imported and is awaiting a future extraction step.")
+
+    file_path = settings.input_dir / job.filename
+    if not file_path.exists():
+        raise HTTPException(404, "Source file not found in input directory — it may have been moved")
+
+    file_bytes = file_path.read_bytes()
+    job_store.update_status(job_id, JobStatus.processing)
+    audit_log.log(job_id, "PROCESSING_STARTED", {
+        "filename": job.filename,
+        "source": "server_import",
+        "ingest_source_id": job.ingest_source_id,
+    })
+
+    refreshed = job_store.load(job_id)
+    background_tasks.add_task(
+        _run_ingest_and_detect, refreshed, file_bytes,
+        pdf_provider or None, pdf_model or None, pdf_api_key or None,
+    )
+    return {"job_id": job_id, "status": JobStatus.processing}
+
+
 # ── LLM Export ───────────────────────────────────────────────────────────────
 
 @router.get("/api/llm-export/prompts")

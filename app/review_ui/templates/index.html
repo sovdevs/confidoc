@@ -94,6 +94,8 @@ aside { width: var(--sidebar-w); flex-shrink: 0; background: var(--surface);
 /* ── Status badges ───────────────────────────────────────── */
 .badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
          text-transform: uppercase; letter-spacing: .4px; }
+.badge-imported  { background:#0f1a30; color:#5b9cf6; }
+.badge-processing{ background:#3a2a10; color:#e5c84e; }
 .badge-pending   { background:#2a2d3e; color:var(--muted); }
 .badge-extracting{ background:#3a3010; color:#e5a84e; }
 .badge-reviewing { background:#0f1f40; color:#5b7cf6; }
@@ -519,8 +521,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           <div style="display:flex;gap:6px;margin-bottom:14px">
             <button class="view-tab active" id="src-tab-local">Local</button>
             <button class="view-tab" id="src-tab-demo" style="display:none">Demo</button>
-            <button class="view-tab" id="src-tab-server" disabled
-                    title="Coming soon" style="opacity:.4;cursor:not-allowed">Server</button>
+            <button class="view-tab" id="src-tab-server">Server</button>
           </div>
 
           <!-- Two-column source row: drop zone + folder picker -->
@@ -570,6 +571,37 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               <option value="">— select demo document —</option>
             </select>
             <div id="demo-key-hint" style="font-size:11px;color:var(--muted);margin-top:5px">Demo capture starts automatically when you process a demo document.</div>
+          </div>
+
+          <!-- Server source panel -->
+          <div id="server-source-panel" style="display:none;margin-top:4px">
+            <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px;padding:8px 10px;background:#12162a;border-radius:7px;border:1px solid var(--border)">
+              Pull source documents from a trusted server into the secure Zone 1 store.
+              Files imported here are treated like manually uploaded documents and are not sent to any LLM during import.
+            </div>
+
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+              <select id="server-source-select" style="flex:1;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px">
+                <option value="">— no sources configured —</option>
+              </select>
+              <button class="btn btn-ghost btn-sm" id="btn-server-test">Test</button>
+              <button class="btn btn-ghost btn-sm" id="btn-server-list">List Files</button>
+            </div>
+
+            <div id="server-test-msg" style="display:none;font-size:12px;margin-bottom:8px;padding:5px 8px;border-radius:5px"></div>
+
+            <div id="server-file-wrap" style="display:none">
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                <span id="server-file-summary" style="font-size:12px;color:var(--muted);flex:1"></span>
+                <button class="btn btn-ghost btn-sm" id="btn-server-refresh">↺ Refresh</button>
+                <button class="btn btn-ghost btn-sm" id="btn-server-pull-selected">↓ Pull Selected</button>
+                <button class="btn btn-primary btn-sm" id="btn-server-pull-unseen">↓ Pull Unseen</button>
+              </div>
+              <div id="server-pull-msg" style="display:none;font-size:12px;margin-bottom:6px;padding:5px 8px;border-radius:5px"></div>
+              <div id="server-file-table" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;font-size:11px">
+                <!-- rows inserted by JS -->
+              </div>
+            </div>
           </div>
 
           <!-- Selected file indicator (shown when any source is chosen) -->
@@ -1186,11 +1218,26 @@ function renderJobList() {
         <span class="${badgeClass(j.status)}">${j.status}</span>
         <span class="job-time">${fmtTime(j.created_at)}</span>
       </div>
+      ${j.status === "imported" && j.requires_ocr !== false ? `
+        <button class="btn btn-primary btn-sm" data-process="${j.id}"
+          style="margin-top:5px;width:100%;font-size:11px;justify-content:center">
+          ▶ Process
+        </button>` : ""}
+      ${j.status === "imported" && j.requires_ocr === false ? `
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4">
+          Non-PDF — awaiting extraction support
+        </div>` : ""}
     </div>
   `).join("");
 
   jobList.querySelectorAll(".job-card").forEach(card => {
     card.addEventListener("click", () => selectJob(card.dataset.id));
+  });
+  jobList.querySelectorAll("[data-process]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      processImportedJob(btn.dataset.process, btn);
+    });
   });
 }
 
@@ -1211,7 +1258,7 @@ async function selectJob(id) {
   showDetailPane();
   renderDetail();
 
-  if (["pending","extracting","exporting"].includes(currentJob.status)) {
+  if (["pending","processing","extracting","exporting"].includes(currentJob.status)) {
     startPoll(id);
   }
   if (_demoCapture) refreshDemoStatus();
@@ -1224,7 +1271,7 @@ function startPoll(id) {
       currentJob = j;
       renderDetail();
       renderJobList();
-      if (!["pending","extracting","exporting"].includes(j.status)) {
+      if (!["pending","processing","extracting","exporting"].includes(j.status)) {
         clearPoll();
       }
     } catch(e) { clearPoll(); }
@@ -2337,6 +2384,199 @@ document.getElementById("btn-inline-approve-ocr").addEventListener("click", asyn
   } catch(e) { showToast(e.message, "error"); }
 });
 
+// ── Process imported job ──────────────────────────────────
+async function processImportedJob(jobId, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Starting…";
+  try {
+    await api(`/api/jobs/${jobId}/process`, {method: "POST"});
+    await loadJobs();
+    if (currentJob?.id === jobId) {
+      currentJob = await api(`/api/jobs/${jobId}`);
+      renderDetail();
+    }
+    startPoll(jobId);
+    showToast("Processing started");
+  } catch(e) {
+    showToast(e.message || "Failed to start processing", "error");
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+// ── Server source tab ─────────────────────────────────────
+let _serverFiles = [];       // last fetched file list
+let _serverSourceId = null;  // currently selected source
+
+async function initServerTab() {
+  const sel = document.getElementById("server-source-select");
+  try {
+    const res = await api("/api/server-sources");
+    const sources = res.sources || [];
+    if (sources.length) {
+      sel.innerHTML = sources.map(s =>
+        `<option value="${escHtml(s.id)}">${escHtml(s.label)} (${escHtml(s.type)})</option>`
+      ).join("");
+      _serverSourceId = sources[0].id;
+    } else {
+      sel.innerHTML = `<option value="">— no sources configured (see sources.sample.json) —</option>`;
+    }
+  } catch(_) {
+    sel.innerHTML = `<option value="">— failed to load sources —</option>`;
+  }
+}
+
+document.getElementById("server-source-select").addEventListener("change", function() {
+  _serverSourceId = this.value || null;
+  document.getElementById("server-file-wrap").style.display = "none";
+  _serverTestMsg("", "");
+});
+
+document.getElementById("btn-server-test").addEventListener("click", async () => {
+  if (!_serverSourceId) { showToast("Select a source first", "error"); return; }
+  _serverTestMsg("Testing…", "info");
+  try {
+    const res = await api(`/api/server-sources/${_serverSourceId}/test`, {method: "POST"});
+    _serverTestMsg(res.message, res.ok ? "ok" : "error");
+  } catch(e) {
+    _serverTestMsg(e.message || "Test failed", "error");
+  }
+});
+
+document.getElementById("btn-server-list").addEventListener("click", () => fetchServerFiles());
+document.getElementById("btn-server-refresh").addEventListener("click", () => fetchServerFiles());
+
+async function fetchServerFiles() {
+  if (!_serverSourceId) { showToast("Select a source first", "error"); return; }
+  _serverTestMsg("Listing remote files…", "info");
+  try {
+    const res = await api(`/api/server-sources/${_serverSourceId}/files`);
+    _serverFiles = res.files || [];
+    _serverTestMsg("", "");
+    renderServerFileTable(_serverFiles);
+  } catch(e) {
+    _serverTestMsg(e.message || "Listing failed", "error");
+  }
+}
+
+function renderServerFileTable(files) {
+  const wrap = document.getElementById("server-file-wrap");
+  const table = document.getElementById("server-file-table");
+  const summary = document.getElementById("server-file-summary");
+  wrap.style.display = "block";
+
+  const counts = {new: 0, seen: 0, changed: 0, unsupported: 0};
+  files.forEach(f => { if (counts[f.status] !== undefined) counts[f.status]++; });
+  summary.textContent = `${counts.new} new · ${counts.changed} changed · ${counts.seen} seen · ${counts.unsupported} unsupported`;
+
+  if (!files.length) {
+    table.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted)">No files found</div>`;
+    return;
+  }
+
+  const statusColor = {new:"var(--success)", seen:"var(--muted)", changed:"var(--warning)", unsupported:"var(--danger)", error:"var(--danger)"};
+  table.innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="background:var(--surface)">
+          <th style="padding:6px 8px;text-align:left;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border)">
+            <input type="checkbox" id="chk-select-all" title="Select all new/changed">
+          </th>
+          <th style="padding:6px 8px;text-align:left;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border)">Status</th>
+          <th style="padding:6px 8px;text-align:left;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border)">Filename</th>
+          <th style="padding:6px 8px;text-align:right;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border)">Size</th>
+          <th style="padding:6px 8px;text-align:left;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border)">Modified</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${files.map((f, i) => `
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:5px 8px">
+              <input type="checkbox" class="server-file-chk" data-path="${escHtml(f.remote_path)}"
+                ${!f.supported || f.status === "seen" ? "disabled" : ""}
+                ${f.status === "new" || f.status === "changed" ? "checked" : ""}>
+            </td>
+            <td style="padding:5px 8px;color:${statusColor[f.status] || "var(--muted)"}">
+              ${f.status}${!f.supported ? " ⚠" : ""}
+            </td>
+            <td style="padding:5px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(f.remote_path)}">
+              ${escHtml(f.filename)}
+            </td>
+            <td style="padding:5px 8px;text-align:right;color:var(--muted)">${fmtBytes(f.size_bytes)}</td>
+            <td style="padding:5px 8px;color:var(--muted)">${fmtTime(f.modified_at)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+
+  document.getElementById("chk-select-all").addEventListener("change", function() {
+    table.querySelectorAll(".server-file-chk:not(:disabled)").forEach(c => c.checked = this.checked);
+  });
+}
+
+document.getElementById("btn-server-pull-unseen").addEventListener("click", async () => {
+  if (!_serverSourceId) { showToast("Select a source first", "error"); return; }
+  _serverPullMsg("Pulling unseen files…", "info");
+  try {
+    const res = await api(`/api/server-sources/${_serverSourceId}/pull-unseen`, {method: "POST",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify({})});
+    _serverPullMsg(
+      `Imported ${res.imported.length} file(s). Skipped ${res.skipped_seen} seen. ${res.unsupported} unsupported.`,
+      res.errors.length ? "error" : "ok",
+    );
+    await loadJobs();
+    await fetchServerFiles();
+  } catch(e) {
+    _serverPullMsg(e.message || "Pull failed", "error");
+  }
+});
+
+document.getElementById("btn-server-pull-selected").addEventListener("click", async () => {
+  if (!_serverSourceId) { showToast("Select a source first", "error"); return; }
+  const selected = [...document.querySelectorAll(".server-file-chk:checked")].map(c => c.dataset.path);
+  if (!selected.length) { showToast("Select at least one file", "error"); return; }
+  _serverPullMsg(`Pulling ${selected.length} file(s)…`, "info");
+  try {
+    const res = await api(`/api/server-sources/${_serverSourceId}/pull`, {method: "POST",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify({remote_paths: selected})});
+    _serverPullMsg(
+      `Imported ${res.imported.length} file(s). Skipped ${res.skipped_seen} seen.`,
+      res.errors.length ? "error" : "ok",
+    );
+    await loadJobs();
+    await fetchServerFiles();
+  } catch(e) {
+    _serverPullMsg(e.message || "Pull failed", "error");
+  }
+});
+
+function _serverTestMsg(msg, type) {
+  const el = document.getElementById("server-test-msg");
+  if (!msg) { el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.textContent = msg;
+  el.style.color = type === "error" ? "var(--danger)" : type === "ok" ? "var(--success)" : "var(--muted)";
+  el.style.background = type === "error" ? "#2a1010" : type === "ok" ? "#0d2018" : "#12162a";
+}
+
+function _serverPullMsg(msg, type) {
+  const el = document.getElementById("server-pull-msg");
+  if (!msg) { el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.textContent = msg;
+  el.style.color = type === "error" ? "var(--danger)" : type === "ok" ? "var(--success)" : "var(--muted)";
+  el.style.background = type === "error" ? "#2a1010" : type === "ok" ? "#0d2018" : "#12162a";
+}
+
+function fmtBytes(n) {
+  if (!n) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n/1024).toFixed(1)} KB`;
+  return `${(n/1048576).toFixed(1)} MB`;
+}
+
 // ── LLM Export panel ──────────────────────────────────────
 let _llmPrompts = [];
 let _llmPromptsLoaded = false;
@@ -3085,7 +3325,7 @@ document.getElementById("src-tab-demo")?.addEventListener("click", function() {
   document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
   this.classList.add("active");
   document.getElementById("demo-source-panel").style.display = "block";
-  // Hide the normal local source grid
+  document.getElementById("server-source-panel").style.display = "none";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "none";
 });
@@ -3094,8 +3334,19 @@ document.getElementById("src-tab-local")?.addEventListener("click", function() {
   document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
   this.classList.add("active");
   document.getElementById("demo-source-panel").style.display = "none";
+  document.getElementById("server-source-panel").style.display = "none";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "";
+});
+
+document.getElementById("src-tab-server")?.addEventListener("click", async function() {
+  document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+  this.classList.add("active");
+  document.getElementById("demo-source-panel").style.display = "none";
+  document.getElementById("server-source-panel").style.display = "block";
+  const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
+  if (grid) grid.style.display = "none";
+  await initServerTab();
 });
 
 // Demo file select → sets selectedFolderFile and updates run hint

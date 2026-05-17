@@ -1,0 +1,36 @@
+[
+  {
+    "id": "clinic_sftp_incoming",
+    "label": "Clinic SFTP incoming folder",
+    "type": "sftp",
+    "enabled": false,
+    "host": "sftp.example.com",
+    "port": 22,
+    "username_env": "CONFIDOC_SFTP_USER",
+    "private_key_path_env": "CONFIDOC_SFTP_KEY_PATH",
+    "remote_path": "/incoming/reports",
+    "filename_patterns": ["*.pdf", "*.docx"]
+  },
+  {
+    "id": "clinic_nextcloud",
+    "label": "Clinic Nextcloud folder",
+    "type": "nextcloud",
+    "enabled": false,
+    "base_url_env": "CONFIDOC_NEXTCLOUD_WEBDAV_URL",
+    "username_env": "CONFIDOC_NEXTCLOUD_USER",
+    "password_env": "CONFIDOC_NEXTCLOUD_APP_PASSWORD",
+    "remote_path": "/remote.php/dav/files/reports",
+    "filename_patterns": ["*.pdf", "*.docx"]
+  },
+  {
+    "id": "demo_github_corpus",
+    "label": "GitHub demo document corpus",
+    "type": "github",
+    "enabled": false,
+    "repo": "your-org/your-repo",
+    "branch": "main",
+    "token_env": "CONFIDOC_GITHUB_TOKEN",
+    "remote_path": "documents/",
+    "filename_patterns": ["*.pdf"]
+  }
+]

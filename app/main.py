@@ -49,6 +49,9 @@ app = FastAPI(title="Confidoc — Secure Document Pipeline")
 
 app.include_router(router)
 
+from app.api.server_sources import router as server_sources_router
+app.include_router(server_sources_router)
+
 _static = Path(__file__).parent / "review_ui" / "static"
 if _static.exists():
     app.mount("/static", StaticFiles(directory=str(_static)), name="static")

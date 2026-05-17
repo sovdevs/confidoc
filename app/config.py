@@ -76,6 +76,8 @@ class Settings:
     zone1_previews_dir: Path = DATA / "zone1" / "previews"  # per-job page PNGs
     prepared_packages_dir: Path = DATA / "prepared_packages"  # Zone 2 export packages
     llm_runs_dir: Path = DATA / "llm_runs"                   # LLM export run artifacts
+    source_configs_dir: Path = DATA / "source_configs"       # sources.json (operator-managed)
+    ingest_registry_path: Path = DATA / "zone1" / "ingest_registry.jsonl"
     audit_log: Path = DATA / "audit.jsonl"
     approved_terms: Path = DATA / "approved_terms.jsonl"
 
@@ -88,6 +90,8 @@ class Settings:
             self.reviewed_dir, self.normalized_dir, self.exported_dir,
             self.final_dir, self.jobs_dir, self.mappings_dir,
             self.zone1_previews_dir, self.prepared_packages_dir, self.llm_runs_dir,
+            self.source_configs_dir,
+            self.ingest_registry_path.parent,  # data/zone1/
         ]
         if self.demo_capture:
             dirs += [self.demo_runs_dir]
