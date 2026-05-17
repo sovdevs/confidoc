@@ -79,6 +79,7 @@ class Settings:
     source_configs_dir: Path = DATA / "source_configs"       # sources.json (operator-managed)
     ingest_registry_path: Path = DATA / "zone1" / "ingest_registry.jsonl"
     gateway_local_dir: Path = DATA / "gateway" / "local"
+    gateway_sftp_dir:  Path = DATA / "gateway" / "sftp"
     auto_approve_gateway_jobs: bool = (
         os.getenv("AUTO_APPROVE_GATEWAY_JOBS", "false").lower() == "true"
     )
@@ -97,6 +98,7 @@ class Settings:
             self.source_configs_dir,
             self.ingest_registry_path.parent,  # data/zone1/
             self.gateway_local_dir,
+            self.gateway_sftp_dir,
         ]
         if self.demo_capture:
             dirs += [self.demo_runs_dir]

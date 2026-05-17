@@ -576,9 +576,10 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           <!-- Server source panel -->
           <div id="server-source-panel" style="display:none;margin-top:4px">
 
-            <!-- Sub-tabs: Local Folder | Remote Sources -->
+            <!-- Sub-tabs: Local Folder | SFTP Gateway | Remote Sources -->
             <div style="display:flex;gap:4px;margin-bottom:10px">
               <button class="view-tab active" id="srv-sub-local">Local Folder</button>
+              <button class="view-tab" id="srv-sub-sftp">SFTP</button>
               <button class="view-tab" id="srv-sub-remote">Remote Sources</button>
             </div>
 
@@ -624,6 +625,63 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               <div id="gw-events-wrap" style="display:none">
                 <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:4px">Recent events</div>
                 <div id="gw-events" style="max-height:140px;overflow-y:auto;font-size:11px;font-family:monospace;color:var(--muted);line-height:1.6"></div>
+              </div>
+            </div>
+
+            <!-- ── SFTP Gateway panel ── -->
+            <div id="srv-panel-sftp" style="display:none">
+              <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px;padding:8px 10px;background:#12162a;border-radius:7px;border:1px solid var(--border)">
+                Pull files from a remote SFTP server using the same gateway lifecycle as Local Folder.
+                Requires <code style="background:var(--border);padding:1px 4px;border-radius:3px">gateway_base</code> in sources.json.
+              </div>
+
+              <!-- Source selector -->
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+                <select id="sftp-gw-source-select" style="flex:1;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px">
+                  <option value="">— no SFTP gateway sources configured —</option>
+                </select>
+                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-test">Test</button>
+                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-ensure">Ensure dirs</button>
+              </div>
+
+              <div id="sftp-gw-test-msg" style="display:none;font-size:12px;margin-bottom:8px;padding:5px 8px;border-radius:5px"></div>
+
+              <!-- Status bar -->
+              <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+                <span id="sftp-gw-badge-incoming" style="font-size:11px;background:var(--border);border-radius:10px;padding:2px 9px">Incoming: —</span>
+                <span id="sftp-gw-badge-processing" style="font-size:11px;background:var(--border);border-radius:10px;padding:2px 9px">Processing: —</span>
+                <span id="sftp-gw-badge-processed" style="font-size:11px;background:#0d2018;color:var(--success);border-radius:10px;padding:2px 9px">Processed: —</span>
+                <span id="sftp-gw-badge-failed" style="font-size:11px;background:#2a1010;color:var(--danger);border-radius:10px;padding:2px 9px">Failed: —</span>
+                <span id="sftp-gw-mode-badge" style="font-size:10px;font-weight:700;letter-spacing:.5px;border-radius:10px;padding:2px 9px;margin-left:auto"></span>
+              </div>
+
+              <!-- Action buttons -->
+              <div style="display:flex;gap:6px;margin-bottom:8px">
+                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-scan">⟳ Scan</button>
+                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-process-next" disabled>▶ Process Next</button>
+                <button class="btn btn-primary btn-sm" id="btn-sftp-gw-process-all" disabled>▶▶ Process All</button>
+              </div>
+
+              <div id="sftp-gw-action-msg" style="display:none;font-size:12px;margin-bottom:8px;padding:5px 8px;border-radius:5px"></div>
+
+              <!-- Batch progress bar -->
+              <div id="sftp-gw-batch-wrap" style="display:none;margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
+                  <span>Batch processing…</span>
+                  <span id="sftp-gw-batch-count"></span>
+                </div>
+                <div style="height:4px;background:var(--border);border-radius:2px">
+                  <div id="sftp-gw-batch-bar" style="height:4px;background:var(--accent);border-radius:2px;width:0%;transition:width .4s"></div>
+                </div>
+              </div>
+
+              <!-- Incoming file list -->
+              <div id="sftp-gw-file-list" style="display:none;border:1px solid var(--border);border-radius:7px;max-height:160px;overflow-y:auto;margin-bottom:8px;font-size:11px"></div>
+
+              <!-- Recent events -->
+              <div id="sftp-gw-events-wrap" style="display:none">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:4px">Recent events</div>
+                <div id="sftp-gw-events" style="max-height:140px;overflow-y:auto;font-size:11px;font-family:monospace;color:var(--muted);line-height:1.6"></div>
               </div>
             </div>
 
@@ -2439,18 +2497,230 @@ document.getElementById("btn-inline-approve-ocr").addEventListener("click", asyn
 });
 
 // ── Server tab sub-tabs ───────────────────────────────────
+function _srvShowPanel(id) {
+  ["srv-panel-local","srv-panel-sftp","srv-panel-remote"].forEach(p => {
+    const el = document.getElementById(p);
+    if (el) el.style.display = (p === id) ? "block" : "none";
+  });
+}
 document.getElementById("srv-sub-local")?.addEventListener("click", function() {
   document.querySelectorAll("#server-source-panel .view-tab").forEach(t => t.classList.remove("active"));
   this.classList.add("active");
-  document.getElementById("srv-panel-local").style.display = "block";
-  document.getElementById("srv-panel-remote").style.display = "none";
+  _srvShowPanel("srv-panel-local");
+});
+document.getElementById("srv-sub-sftp")?.addEventListener("click", async function() {
+  document.querySelectorAll("#server-source-panel .view-tab").forEach(t => t.classList.remove("active"));
+  this.classList.add("active");
+  _srvShowPanel("srv-panel-sftp");
+  await initSFTPGatewayTab();
 });
 document.getElementById("srv-sub-remote")?.addEventListener("click", function() {
   document.querySelectorAll("#server-source-panel .view-tab").forEach(t => t.classList.remove("active"));
   this.classList.add("active");
-  document.getElementById("srv-panel-local").style.display = "none";
-  document.getElementById("srv-panel-remote").style.display = "block";
+  _srvShowPanel("srv-panel-remote");
 });
+
+// ── SFTP Gateway ──────────────────────────────────────────
+let _sftpGwSources = [];
+let _sftpGwSourceId = null;
+let _sftpBatchPollTimer = null;
+
+async function initSFTPGatewayTab() {
+  try {
+    const res = await api("/api/gateway/sftp/sources");
+    _sftpGwSources = res.sources || [];
+    const sel = document.getElementById("sftp-gw-source-select");
+    if (_sftpGwSources.length) {
+      sel.innerHTML = _sftpGwSources.map(s =>
+        `<option value="${escHtml(s.id)}">${escHtml(s.label)}</option>`
+      ).join("");
+      _sftpGwSourceId = _sftpGwSources[0].id;
+      await refreshSFTPGwStatus();
+    } else {
+      sel.innerHTML = `<option value="">— add a source with gateway_base to sources.json —</option>`;
+    }
+  } catch(_) {}
+}
+
+document.getElementById("sftp-gw-source-select")?.addEventListener("change", async function() {
+  _sftpGwSourceId = this.value || null;
+  if (_sftpGwSourceId) await refreshSFTPGwStatus();
+});
+
+async function refreshSFTPGwStatus() {
+  if (!_sftpGwSourceId) return;
+  try {
+    const res = await api(`/api/gateway/sftp/${_sftpGwSourceId}/status`);
+    const c   = res.counts || {};
+    const miss = v => v === -1 ? "?" : v ?? "—";
+    document.getElementById("sftp-gw-badge-incoming").textContent   = `Incoming: ${miss(c.incoming)}`;
+    document.getElementById("sftp-gw-badge-processing").textContent = `Processing: ${miss(c.processing)}`;
+    document.getElementById("sftp-gw-badge-processed").textContent  = `Processed: ${miss(c.processed)}`;
+    document.getElementById("sftp-gw-badge-failed").textContent     = `Failed: ${miss(c.failed)}`;
+
+    const mb = document.getElementById("sftp-gw-mode-badge");
+    if (res.auto_approve) {
+      mb.textContent = "AUTO"; mb.style.background = "#0f2a1d"; mb.style.color = "var(--success)";
+    } else {
+      mb.textContent = "MANUAL REVIEW"; mb.style.background = "#0f1f40"; mb.style.color = "#5b7cf6";
+    }
+
+    const events = res.recent_events || [];
+    const evWrap = document.getElementById("sftp-gw-events-wrap");
+    const evEl   = document.getElementById("sftp-gw-events");
+    if (events.length) {
+      evWrap.style.display = "block";
+      evEl.innerHTML = events.map(e => {
+        const ts  = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : "";
+        const jid = e.job_id ? ` [${e.job_id.slice(0,8)}]` : "";
+        return `<div>${ts} <span style="color:var(--text)">${escHtml(e.event)}</span>${jid} ${escHtml(e.filename || "")}</div>`;
+      }).join("");
+    } else {
+      evWrap.style.display = "none";
+    }
+  } catch(_) {}
+}
+
+document.getElementById("btn-sftp-gw-test")?.addEventListener("click", async () => {
+  if (!_sftpGwSourceId) { showToast("Select a source first", "error"); return; }
+  _sftpGwMsg("Testing connection…", "info");
+  try {
+    const res = await api(`/api/gateway/sftp/${_sftpGwSourceId}/test`, {method: "POST"});
+    _sftpGwMsg(res.message, res.ok ? "ok" : "error");
+  } catch(e) { _sftpGwMsg(e.message || "Test failed", "error"); }
+});
+
+document.getElementById("btn-sftp-gw-ensure")?.addEventListener("click", async () => {
+  if (!_sftpGwSourceId) { showToast("Select a source first", "error"); return; }
+  _sftpGwMsg("Creating remote directories…", "info");
+  try {
+    const res = await api(`/api/gateway/sftp/${_sftpGwSourceId}/ensure-dirs`, {method: "POST"});
+    _sftpGwMsg(
+      res.ok ? `Directories ready${res.created?.length ? ` (created: ${res.created.join(", ")})` : " (already existed)"}` : res.error,
+      res.ok ? "ok" : "error",
+    );
+    await refreshSFTPGwStatus();
+  } catch(e) { _sftpGwMsg(e.message || "Failed", "error"); }
+});
+
+document.getElementById("btn-sftp-gw-scan")?.addEventListener("click", async () => {
+  if (!_sftpGwSourceId) { showToast("Select a source first", "error"); return; }
+  _sftpGwMsg("Scanning remote incoming/…", "info");
+  try {
+    const res   = await api(`/api/gateway/sftp/${_sftpGwSourceId}/scan`, {method: "POST"});
+    const files = res.files || [];
+    const fl    = document.getElementById("sftp-gw-file-list");
+
+    document.getElementById("btn-sftp-gw-process-next").disabled = !res.actionable;
+    document.getElementById("btn-sftp-gw-process-all").disabled  = !res.actionable;
+
+    if (!files.length) {
+      _sftpGwMsg("No files found in remote incoming/", "info");
+      fl.style.display = "none";
+    } else {
+      _sftpGwMsg(`${res.count} file(s) — ${res.actionable} ready to process`, "ok");
+      fl.style.display = "block";
+      fl.innerHTML = files.map(f => `
+        <div style="display:flex;gap:8px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--border)">
+          <span style="color:${f.supported ? (f.requires_ocr ? "var(--success)" : "var(--warning)") : "var(--danger)"}">
+            ${f.supported ? (f.requires_ocr ? "✓" : "~") : "✗"}
+          </span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(f.filename)}</span>
+          <span style="color:var(--muted)">${fmtBytes(f.size_bytes)}</span>
+        </div>`).join("");
+    }
+    await refreshSFTPGwStatus();
+  } catch(e) { _sftpGwMsg(e.message || "Scan failed", "error"); }
+});
+
+document.getElementById("btn-sftp-gw-process-next")?.addEventListener("click", async () => {
+  if (!_sftpGwSourceId) return;
+  document.getElementById("btn-sftp-gw-process-next").disabled = true;
+  document.getElementById("btn-sftp-gw-process-all").disabled  = true;
+  _sftpGwMsg("Processing next file…", "info");
+  try {
+    const res = await api(`/api/gateway/sftp/${_sftpGwSourceId}/process-next`, {method: "POST"});
+    _sftpGwRunResult([res]);
+    await loadJobs();
+    await refreshSFTPGwStatus();
+  } catch(e) {
+    _sftpGwMsg(e.message || "Failed", "error");
+  } finally {
+    document.getElementById("btn-sftp-gw-process-next").disabled = false;
+    document.getElementById("btn-sftp-gw-process-all").disabled  = false;
+  }
+});
+
+document.getElementById("btn-sftp-gw-process-all")?.addEventListener("click", async () => {
+  if (!_sftpGwSourceId) return;
+  document.getElementById("btn-sftp-gw-process-next").disabled = true;
+  document.getElementById("btn-sftp-gw-process-all").disabled  = true;
+  _sftpGwMsg("", "");
+  try {
+    const res = await api(`/api/gateway/sftp/${_sftpGwSourceId}/process-all`, {method: "POST"});
+    if (!res.ok) { _sftpGwMsg(res.message || "Nothing to process", "info"); return; }
+    _sftpGwMsg(`Batch started — ${res.started} file(s) queued for manual review`, "info");
+    _startSFTPBatchPoll();
+  } catch(e) {
+    _sftpGwMsg(e.message || "Failed to start batch", "error");
+    document.getElementById("btn-sftp-gw-process-next").disabled = false;
+    document.getElementById("btn-sftp-gw-process-all").disabled  = false;
+  }
+});
+
+function _startSFTPBatchPoll() {
+  clearInterval(_sftpBatchPollTimer);
+  document.getElementById("sftp-gw-batch-wrap").style.display = "block";
+  _sftpBatchPollTimer = setInterval(async () => {
+    try {
+      const res = await api(`/api/gateway/sftp/${_sftpGwSourceId}/batch-status`);
+      const b   = res.batch;
+      if (!b) return;
+
+      const pct = b.total ? Math.round((b.processed / b.total) * 100) : 0;
+      document.getElementById("sftp-gw-batch-bar").style.width    = pct + "%";
+      document.getElementById("sftp-gw-batch-count").textContent  =
+        `${b.processed}/${b.total} (${b.succeeded} ok, ${b.failed} failed)`;
+
+      await loadJobs();
+      await refreshSFTPGwStatus();
+
+      if (!b.running) {
+        clearInterval(_sftpBatchPollTimer);
+        document.getElementById("sftp-gw-batch-wrap").style.display = "none";
+        document.getElementById("btn-sftp-gw-process-next").disabled = false;
+        document.getElementById("btn-sftp-gw-process-all").disabled  = false;
+        _sftpGwMsg(
+          `Batch complete — ${b.succeeded} in review queue, ${b.failed} failed`,
+          b.failed ? "error" : "ok",
+        );
+      }
+    } catch(_) {}
+  }, 2500);
+}
+
+function _sftpGwRunResult(results) {
+  const ok   = results.filter(r => r.ok).length;
+  const fail = results.length - ok;
+  const parts = [`${ok} completed`];
+  if (fail) parts.push(`${fail} failed`);
+  const exports = results.filter(r => r.remote_export_dir).map(r =>
+    `<div style="margin-top:3px">↳ remote: <code style="font-size:10px">${escHtml(r.remote_export_dir)}</code></div>`
+  ).join("");
+  const el = document.getElementById("sftp-gw-action-msg");
+  el.style.display    = "block";
+  el.style.color      = fail ? "var(--warning)" : "var(--success)";
+  el.style.background = fail ? "#2a1800" : "#0d2018";
+  el.innerHTML        = parts.join(" · ") + exports;
+}
+
+function _sftpGwMsg(msg, type) {
+  const el = document.getElementById("sftp-gw-action-msg");
+  el.style.display    = msg ? "block" : "none";
+  el.textContent      = msg;
+  el.style.color      = type === "error" ? "var(--danger)" : type === "ok" ? "var(--success)" : "var(--muted)";
+  el.style.background = type === "error" ? "#2a1010" : type === "ok" ? "#0d2018" : "#12162a";
+}
 
 // ── Gateway local folder ──────────────────────────────────
 async function refreshGatewayStatus() {

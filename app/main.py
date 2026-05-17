@@ -55,6 +55,9 @@ app.include_router(server_sources_router)
 from app.api.gateway import router as gateway_router
 app.include_router(gateway_router)
 
+from app.api.gateway_sftp import router as gateway_sftp_router
+app.include_router(gateway_sftp_router)
+
 _static = Path(__file__).parent / "review_ui" / "static"
 if _static.exists():
     app.mount("/static", StaticFiles(directory=str(_static)), name="static")
