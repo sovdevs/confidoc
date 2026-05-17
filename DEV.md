@@ -83,6 +83,15 @@ data/
   llm_runs/              LLM export run artifacts (per job_id)
   llm_export_prompts/    saved prompt .md files for LLM export feature
   source_configs/        sources.json (operator-managed, see sources.sample.json)
+  gateway/
+    local/
+      incoming/          drop files here for gateway pickup
+      processing/        file moves here while its job is running
+      processed/         renamed {job_id}_{filename} on success
+      failed/            renamed {timestamp}_{filename} on error
+      exports/           {job_id}/ per-job export artifacts (auto mode)
+      registry.jsonl     append-only event log for gateway activity
+      batch_status.json  live progress for the current Process All batch
   zone1/
     previews/            per-job PDF page PNGs (Zone 1 only)
     ingest_registry.jsonl  seen-file registry for server source deduplication
@@ -165,6 +174,73 @@ Supported connector types: `sftp`, `webdav` / `nextcloud`, `github`.
 - Supported extensions enforced: `.pdf .docx .doc .rtf .txt .md .odt`
 - Non-PDF imports get `requires_ocr=false`; the Process button is disabled for them
   pending future extraction support
+
+## Local Folder Gateway (Secure Gateway Phase 1)
+
+The gateway is a local-folder intake channel that reuses the existing Confidoc pipeline.
+No separate processing logic is built — it calls `ingest.run()`, `anon.run()`,
+`anon_llm.run()`, and `export.run()` directly.
+
+**Demo flow:**
+```bash
+mkdir -p data/gateway/local/incoming
+cp /path/to/reports/*.pdf data/gateway/local/incoming/
+# Start Confidoc, then: Server tab → Local Folder → Scan → Process All
+```
+
+**Two processing modes:**
+
+| Button | Behaviour | Auto-approve? |
+|--------|-----------|---------------|
+| **Process Next** | Foreground — blocks until one file completes, returns result | Respects `AUTO_APPROVE_GATEWAY_JOBS` |
+| **Process All** | Background batch — returns immediately, jobs appear in sidebar as each finishes | Always manual (force_manual=True) |
+
+**Process All** always lands jobs in `reviewing` status regardless of `AUTO_APPROVE_GATEWAY_JOBS`.
+This is intentional — batch intake is for ingestion, not automated approval.
+
+**Process Next** with `AUTO_APPROVE_GATEWAY_JOBS=true`:
+- OCR → entity detection → auto-approve all entities → `export.run()` → copy
+  reviewed MD / TMX / CSV to `exports/{job_id}/` → job marked `done`
+
+**Process Next** with `AUTO_APPROVE_GATEWAY_JOBS=false` (default):
+- OCR → entity detection → stops at `reviewing` → job enters normal review queue
+
+**Batch progress:** UI polls `/api/gateway/local/batch-status` every 2.5s and calls
+`loadJobs()` on each tick, so jobs populate the sidebar live.
+
+**File lifecycle:**
+```
+incoming/{file}
+  → processing/{file}        (while pipeline runs)
+  → processed/{job_id}_{file}  (on success)
+  → failed/{timestamp}_{file}  (on error)
+```
+
+**`reviewed_md` is created on Approve All** (not on first export). After clicking
+Approve All, the pseudonymized markdown with stable tokens is generated immediately,
+making OCR Check and LLM Export available without needing to run the policy engine first.
+
+**Gateway endpoints:**
+```
+GET  /api/gateway/local/status       counts + recent registry events
+POST /api/gateway/local/scan         list incoming/ files
+POST /api/gateway/local/process-next foreground: process one file
+POST /api/gateway/local/process-all  background batch: process all files
+GET  /api/gateway/local/batch-status current batch progress
+```
+
+**Env var:**
+```bash
+AUTO_APPROVE_GATEWAY_JOBS=false   # true = auto mode for Process Next only
+```
+
+**Known limitations (Phase 1):**
+- Local folder only; SFTP/WebDAV/GitHub connectors pull to `data/input/`, not the gateway
+- Non-PDF files are ingested (file moves to processing/) but pipeline does not run —
+  Process button is disabled; file will move to failed/ with a clear message
+- No filesystem watcher; scanning is always manual (click Scan)
+- Auto mode is not recommended for fax/low-quality scans — entity offsets may be
+  incorrect, and missed PHI will not be caught without human review
 
 ## Zone model
 
