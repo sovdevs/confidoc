@@ -606,6 +606,16 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               </div>
 
               <div id="gw-action-msg" style="display:none;font-size:12px;margin-bottom:8px;padding:5px 8px;border-radius:5px"></div>
+              <!-- Batch progress bar -->
+              <div id="gw-batch-wrap" style="display:none;margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
+                  <span>Batch processing…</span>
+                  <span id="gw-batch-count"></span>
+                </div>
+                <div style="height:4px;background:var(--border);border-radius:2px">
+                  <div id="gw-batch-bar" style="height:4px;background:var(--accent);border-radius:2px;width:0%;transition:width .4s"></div>
+                </div>
+              </div>
 
               <!-- Incoming file list -->
               <div id="gw-file-list" style="display:none;border:1px solid var(--border);border-radius:7px;max-height:160px;overflow-y:auto;margin-bottom:8px;font-size:11px"></div>
@@ -2530,18 +2540,51 @@ document.getElementById("btn-gw-process-next")?.addEventListener("click", async 
 document.getElementById("btn-gw-process-all")?.addEventListener("click", async () => {
   document.getElementById("btn-gw-process-next").disabled = true;
   document.getElementById("btn-gw-process-all").disabled  = true;
-  _gwMsg("Processing all files… (this may take a while)", "info");
+  _gwMsg("", "");
   try {
     const res = await api("/api/gateway/local/process-all", {method: "POST"});
-    _gwRunResult(res.results || []);
-    await loadJobs();
-    await refreshGatewayStatus();
+    if (!res.ok) { _gwMsg(res.message || "Nothing to process", "info"); return; }
+    _gwMsg(`Batch started — ${res.started} file(s) queued for manual review`, "info");
+    _startBatchPoll();
   } catch(e) {
-    _gwMsg(e.message || "Processing failed", "error");
+    _gwMsg(e.message || "Failed to start batch", "error");
     document.getElementById("btn-gw-process-next").disabled = false;
     document.getElementById("btn-gw-process-all").disabled  = false;
   }
 });
+
+let _batchPollTimer = null;
+function _startBatchPoll() {
+  clearInterval(_batchPollTimer);
+  document.getElementById("gw-batch-wrap").style.display = "block";
+  _batchPollTimer = setInterval(async () => {
+    try {
+      const res = await api("/api/gateway/local/batch-status");
+      const b   = res.batch;
+      if (!b) return;
+
+      const pct = b.total ? Math.round((b.processed / b.total) * 100) : 0;
+      document.getElementById("gw-batch-bar").style.width  = pct + "%";
+      document.getElementById("gw-batch-count").textContent =
+        `${b.processed}/${b.total} (${b.succeeded} ok, ${b.failed} failed)`;
+
+      await loadJobs();
+      await refreshGatewayStatus();
+
+      if (!b.running) {
+        clearInterval(_batchPollTimer);
+        document.getElementById("gw-batch-wrap").style.display = "none";
+        document.getElementById("btn-gw-process-next").disabled = false;
+        document.getElementById("btn-gw-process-all").disabled  = false;
+        _gwMsg(
+          `Batch complete — ${b.succeeded} in review queue, ${b.failed} failed`,
+          b.failed ? "error" : "ok",
+        );
+        await refreshGatewayStatus();
+      }
+    } catch(_) {}
+  }, 2500);
+}
 
 function _gwRunResult(results) {
   const ok    = results.filter(r => r.ok).length;

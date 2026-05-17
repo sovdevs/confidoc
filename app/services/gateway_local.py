@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -29,6 +30,7 @@ class LocalGateway:
         self.failed      = base / "failed"
         self.exports     = base / "exports"
         self.registry    = base / "registry.jsonl"
+        self.batch_file  = base / "batch_status.json"
 
     def ensure_dirs(self) -> None:
         for d in (self.incoming, self.processing, self.processed, self.failed, self.exports):
@@ -124,9 +126,56 @@ class LocalGateway:
                 shutil.move(str(candidate), dst)
                 break
 
+    # ── Batch status ──────────────────────────────────────────────────────────
+
+    def batch_start(self, filenames: list[str]) -> str:
+        batch_id = uuid.uuid4().hex[:8]
+        status = {
+            "batch_id":   batch_id,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": None,
+            "total":      len(filenames),
+            "processed":  0,
+            "succeeded":  0,
+            "failed":     0,
+            "running":    True,
+            "results":    [],
+        }
+        self.batch_file.parent.mkdir(parents=True, exist_ok=True)
+        self.batch_file.write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+        return batch_id
+
+    def batch_update(self, result: dict) -> None:
+        if not self.batch_file.exists():
+            return
+        status = json.loads(self.batch_file.read_text(encoding="utf-8"))
+        status["processed"] += 1
+        if result.get("ok"):
+            status["succeeded"] += 1
+        else:
+            status["failed"] += 1
+        status["results"].append(result)
+        self.batch_file.write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+
+    def batch_finish(self) -> None:
+        if not self.batch_file.exists():
+            return
+        status = json.loads(self.batch_file.read_text(encoding="utf-8"))
+        status["running"]     = False
+        status["finished_at"] = datetime.now(timezone.utc).isoformat()
+        self.batch_file.write_text(json.dumps(status, ensure_ascii=False), encoding="utf-8")
+
+    def batch_status(self) -> Optional[dict]:
+        if not self.batch_file.exists():
+            return None
+        try:
+            return json.loads(self.batch_file.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
     # ── Pipeline ──────────────────────────────────────────────────────────────
 
-    async def process_file(self, filename: str) -> dict:
+    async def process_file(self, filename: str, force_manual: bool = False) -> dict:
         """Run the full gateway pipeline for one file from incoming/.
 
         Reuses the existing Confidoc pipeline functions directly.
@@ -168,7 +217,7 @@ class LocalGateway:
         self._log("imported", filename, job_id=job.id)
         audit_log.log(job.id, "GATEWAY_IMPORTED", {"filename": filename})
 
-        auto = settings.auto_approve_gateway_jobs
+        auto = (not force_manual) and settings.auto_approve_gateway_jobs
 
         try:
             # ── OCR + entity detection (identical to normal upload pipeline) ──
