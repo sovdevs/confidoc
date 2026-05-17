@@ -2387,17 +2387,23 @@ document.getElementById("llm-prompt-mode").addEventListener("change", function()
 });
 
 // Provider → populate model list
-document.getElementById("llm-provider").addEventListener("change", async function() {
+async function loadLLMModelList() {
+  const provider = document.getElementById("llm-provider").value;
+  const apiKey   = document.getElementById("llm-api-key").value.trim();
   const dl = document.getElementById("llm-model-list");
   dl.innerHTML = "";
   try {
-    const res = await api(`/api/models?provider=${encodeURIComponent(this.value)}`);
+    const params = new URLSearchParams({provider});
+    if (apiKey) params.set("api_key", apiKey);
+    const res = await api(`/api/models?${params}`);
     (res.models || []).forEach(m => {
       const opt = document.createElement("option");
-      opt.value = m; dl.appendChild(opt);
+      opt.value = m.id ?? m; dl.appendChild(opt);
     });
   } catch(_) {}
-});
+}
+document.getElementById("llm-provider").addEventListener("change", loadLLMModelList);
+document.getElementById("llm-api-key").addEventListener("change", loadLLMModelList);
 
 // Run button
 document.getElementById("llm-run-btn").addEventListener("click", async () => {

@@ -132,6 +132,9 @@ async def llm_export_complete(
     if provider == "localhost":
         resp = await _localhost_provider("").complete(request, api_key=api_key or "none")
     elif provider == "google":
+        # Google's API uses bare model IDs (e.g. "gemini-2.0-flash"), not the
+        # OpenRouter-prefixed form ("google/gemini-2.0-flash").
+        request.model = request.model.removeprefix("google/")
         resp = await _google_provider("").complete(request, api_key=api_key or "none")
     else:
         resp = await _make_service(provider, api_key).complete(request)

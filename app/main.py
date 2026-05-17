@@ -79,7 +79,11 @@ async def list_models(
     api_key: str  = Query(""),
 ):
     """Proxy the provider's model list, filtered to vision-capable models."""
-    key = api_key or settings.pdf_api_key
+    # For Google direct, prefer the anon key (text tasks) over the pdf key
+    if provider == "google":
+        key = api_key or settings.anon_api_key or settings.pdf_api_key
+    else:
+        key = api_key or settings.pdf_api_key
 
     if provider == "openrouter":
         try:
