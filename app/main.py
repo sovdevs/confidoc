@@ -47,6 +47,13 @@ _migrate_approved_terms()
 
 app = FastAPI(title="Confidoc — Secure Document Pipeline")
 
+from app.auth.middleware import AuthMiddleware
+from app.auth.routes import router as auth_router
+from app.api.user_settings import router as user_settings_router
+app.add_middleware(AuthMiddleware)
+app.include_router(auth_router)
+app.include_router(user_settings_router)
+
 app.include_router(router)
 
 from app.api.server_sources import router as server_sources_router

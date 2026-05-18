@@ -80,6 +80,17 @@ class Settings:
     ingest_registry_path: Path = DATA / "zone1" / "ingest_registry.jsonl"
     gateway_local_dir: Path = DATA / "gateway" / "local"
     gateway_sftp_dir:  Path = DATA / "gateway" / "sftp"
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+    auth_enabled: bool = os.getenv("CONFIDOC_AUTH_ENABLED", "true").lower() == "true"
+    strict_auth_mode: bool = os.getenv("STRICT_AUTH_MODE", "false").lower() == "true"
+    session_ttl_hours: int = int(os.getenv("SESSION_TTL_HOURS", "8"))
+    # Separate encryption key for user settings (falls back to MAPPING_KEY if unset)
+    settings_key: str = os.getenv("SETTINGS_KEY", os.getenv("MAPPING_KEY", ""))
+
+    auth_dir: Path = DATA / "auth"
+    users_file: Path = DATA / "auth" / "users.json"
+    user_settings_dir: Path = DATA / "auth" / "user_settings"
     auto_approve_gateway_jobs: bool = (
         os.getenv("AUTO_APPROVE_GATEWAY_JOBS", "false").lower() == "true"
     )
@@ -99,6 +110,8 @@ class Settings:
             self.ingest_registry_path.parent,  # data/zone1/
             self.gateway_local_dir,
             self.gateway_sftp_dir,
+            self.auth_dir,
+            self.user_settings_dir,
         ]
         if self.demo_capture:
             dirs += [self.demo_runs_dir]

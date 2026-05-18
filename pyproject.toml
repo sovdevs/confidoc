@@ -17,6 +17,7 @@ dependencies = [
     "python-docx>=1.2.0",
     "paramiko>=3.0.0",
     "httpx>=0.27.0",
+    "bcrypt>=4.0.0",
 ]
 
 [tool.uv]
@@ -28,6 +29,7 @@ pdf-to-markdown = { path = "vendor/pdf-to-markdown" }
 
 [project.scripts]
 confidoc = "app.main:main"
+confidoc-auth = "app.auth.cli:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -229,6 +229,7 @@ name = "confidoc"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "bcrypt" },
     { name = "cogtrix-byok" },
     { name = "cryptography" },
     { name = "fastapi" },
@@ -252,6 +253,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bcrypt", specifier = ">=4.0.0" },
     { name = "cogtrix-byok", directory = "vendor/cogtrix_byok" },
     { name = "cryptography", specifier = ">=43.0.0" },
     { name = "fastapi", specifier = ">=0.136.0" },
