@@ -11,6 +11,10 @@ __pycache__/
 .env.*
 *.key
 data/mappings/.key
+# never commit user store — create with: uv run confidoc-auth create-user <username>
+data/auth/users.json
+# never commit encrypted per-user settings
+data/auth/user_settings/
 
 # ── PDFs (never commit patient/confidential documents) ─────
 *.pdf

@@ -275,6 +275,61 @@ insulates Confidoc from that path change.
 4. Add an example entry to `data/source_configs/sources.sample.json`
 5. Document required env vars in this file
 
+## Auth setup
+
+Confidoc uses session-based auth (HTTP-only cookie, bcrypt passwords).
+Auth is enabled by default (`CONFIDOC_AUTH_ENABLED=true`).
+
+### Create a user (required before first run)
+
+```bash
+uv run confidoc-auth create-user <username>
+# prompts for password (min 8 chars)
+```
+
+Other commands:
+```bash
+uv run confidoc-auth list-users
+uv run confidoc-auth delete-user <username>
+```
+
+### Security rules
+
+- **Never commit `data/auth/users.json`** — it is gitignored. Create users after deploy.
+- **Never commit `data/auth/user_settings/`** — Fernet-encrypted secrets, also gitignored.
+- The startup log warns if no users exist or if a demo username (`admin`, `test`, `demo`)
+  is detected.
+
+### Required env vars
+
+```bash
+MAPPING_KEY=<fernet-key>   # encrypts token maps + user settings
+# Optional override for user settings (falls back to MAPPING_KEY):
+SETTINGS_KEY=<fernet-key>
+```
+
+Generate a Fernet key:
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+### Render deployment
+
+Two options for persisting `users.json`:
+
+**Option A — persistent disk (recommended):**
+Mount Render's disk at `/data`. Users created via the one-off shell survive restarts.
+```bash
+# In Render shell after first deploy:
+uv run confidoc-auth create-user <username>
+```
+
+**Option B — bake into image (low-security environments only):**
+Create the user locally, copy `data/auth/users.json` into the Docker image via `Dockerfile`.
+Not recommended — the hash is visible to anyone with image access.
+
+`CONFIDOC_AUTH_ENABLED=false` disables the middleware entirely (local dev only).
+
 ## Deployment
 
 See `RENDER.md` for Render.com instructions.

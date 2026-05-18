@@ -45,6 +45,38 @@ def _migrate_approved_terms() -> None:
 
 _migrate_approved_terms()
 
+
+def _check_auth_config() -> None:
+    """Warn loudly about missing users or demo credentials still in place."""
+    import json as _json
+
+    p = settings.users_file
+    if not p.exists() or p.stat().st_size == 0:
+        logger.warning(
+            "NO USERS CONFIGURED — all protected endpoints will return 401. "
+            "Create a user: uv run confidoc-auth create-user <username>"
+        )
+        return
+
+    try:
+        users = _json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    demo_usernames = {"admin", "test", "demo", "root"}
+    flagged = [u["username"] for u in users if u.get("username") in demo_usernames]
+    if flagged:
+        logger.warning(
+            "SECURITY WARNING: demo/default username(s) detected in users.json: %s. "
+            "Delete and recreate with a proper username before deploying: "
+            "uv run confidoc-auth delete-user <username> && "
+            "uv run confidoc-auth create-user <username>",
+            ", ".join(flagged),
+        )
+
+
+_check_auth_config()
+
 app = FastAPI(title="Confidoc — Secure Document Pipeline")
 
 from app.auth.middleware import AuthMiddleware
