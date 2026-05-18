@@ -49,13 +49,8 @@ _SECRET_FIELDS = {"private_key", "password", "passphrase", "api_key", "token"}
 
 
 def _get_key() -> bytes:
-    raw = settings.settings_key
-    if not raw:
-        raise RuntimeError(
-            "No SETTINGS_KEY or MAPPING_KEY configured — "
-            "cannot encrypt/decrypt user settings."
-        )
-    # Reuse the same Fernet key derivation as mappings.py
+    # Delegate to mappings._get_key() which handles auto-generation for dev
+    # and uses MAPPING_KEY / SETTINGS_KEY for production.
     from app.storage.mappings import _get_key as _mapping_key
     return _mapping_key()
 

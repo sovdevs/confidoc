@@ -85,8 +85,6 @@ class Settings:
     auth_enabled: bool = os.getenv("CONFIDOC_AUTH_ENABLED", "true").lower() == "true"
     strict_auth_mode: bool = os.getenv("STRICT_AUTH_MODE", "false").lower() == "true"
     session_ttl_hours: int = int(os.getenv("SESSION_TTL_HOURS", "8"))
-    # Separate encryption key for user settings (falls back to MAPPING_KEY if unset)
-    settings_key: str = os.getenv("SETTINGS_KEY", os.getenv("MAPPING_KEY", ""))
 
     auth_dir: Path = DATA / "auth"
     users_file: Path = DATA / "auth" / "users.json"

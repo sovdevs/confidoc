@@ -3583,25 +3583,34 @@ document.getElementById("btn-st-save-key")?.addEventListener("click", async () =
     setTimeout(() => loadUserSettings(), 600);
   } catch(e) {
     statusEl.style.color = "var(--danger)";
-    statusEl.textContent = "Failed to save key";
-    setTimeout(() => { statusEl.style.color = ""; statusEl.textContent = ""; }, 3000);
+    statusEl.textContent = e.message?.slice(0, 80) || "Failed to save key";
+    setTimeout(() => { statusEl.style.color = ""; statusEl.textContent = ""; }, 4000);
   }
 });
 
 document.getElementById("btn-st-save-sftp")?.addEventListener("click", async () => {
-  const statusEl    = document.getElementById("st-sftp-status");
-  const id          = document.getElementById("st-sftp-id").value.trim();
-  const label       = document.getElementById("st-sftp-label").value.trim();
-  const host        = document.getElementById("st-sftp-host").value.trim();
-  const port        = parseInt(document.getElementById("st-sftp-port").value) || 22;
-  const username    = document.getElementById("st-sftp-user").value.trim();
+  const statusEl     = document.getElementById("st-sftp-status");
+  const idEl         = document.getElementById("st-sftp-id");
+  const label        = document.getElementById("st-sftp-label").value.trim();
+  const host         = document.getElementById("st-sftp-host").value.trim();
+  const port         = parseInt(document.getElementById("st-sftp-port").value) || 22;
+  const username     = document.getElementById("st-sftp-user").value.trim();
   const gateway_base = document.getElementById("st-sftp-base").value.trim();
-  const private_key = document.getElementById("st-sftp-key").value.trim();
-  if (!id || !host || !username || !gateway_base) {
+  const private_key  = document.getElementById("st-sftp-key").value.trim();
+
+  if (!host || !username || !gateway_base) {
     statusEl.style.color = "var(--danger)";
-    statusEl.textContent = "id, host, username and gateway_base are required";
+    statusEl.textContent = "host, username and gateway_base are required";
     return;
   }
+
+  // Auto-generate ID from host if blank
+  let id = idEl.value.trim();
+  if (!id) {
+    id = "sftp_" + host.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+    idEl.value = id;
+  }
+
   statusEl.style.color = "";
   statusEl.textContent = "Saving…";
   try {
@@ -3609,7 +3618,7 @@ document.getElementById("btn-st-save-sftp")?.addEventListener("click", async () 
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
-        id, label: label || id, host, port, username, gateway_base,
+        id, label: label || host, host, port, username, gateway_base,
         auth_method: private_key ? "key" : "password",
         private_key: private_key || null,
       }),
@@ -3617,10 +3626,13 @@ document.getElementById("btn-st-save-sftp")?.addEventListener("click", async () 
     document.getElementById("st-sftp-key").value = "";
     statusEl.textContent = "Saved ✓";
     setTimeout(() => { statusEl.textContent = ""; }, 3000);
+    // Refresh gateway tab if open
+    if (document.getElementById("server-source-panel")?.style.display !== "none")
+      refreshGatewayStatus().catch(() => {});
   } catch(e) {
     statusEl.style.color = "var(--danger)";
-    statusEl.textContent = "Save failed";
-    setTimeout(() => { statusEl.style.color = ""; statusEl.textContent = ""; }, 3000);
+    statusEl.textContent = e.message?.slice(0, 80) || "Save failed";
+    setTimeout(() => { statusEl.style.color = ""; statusEl.textContent = ""; }, 4000);
   }
 });
 
