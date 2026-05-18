@@ -86,10 +86,14 @@ class SFTPGateway:
 
         kwargs: dict = dict(hostname=host, port=port, username=username, timeout=20)
 
-        # Inline PEM key via env var (for cloud deployments without disk access)
-        key_content = _env(cfg, "private_key_content_env")
+        # Inline PEM key: from env var, direct config field, or user settings (_inline_key)
+        key_content = (
+            _env(cfg, "private_key_content_env")
+            or cfg.get("_inline_key")          # injected by gateway_sftp.py from user .enc
+            or cfg.get("private_key")           # direct field (user settings)
+        )
         key_path    = _env(cfg, "private_key_path_env") or cfg.get("private_key_path")
-        password    = _env(cfg, "password_env")
+        password    = _env(cfg, "password_env") or cfg.get("password")
 
         if key_content:
             pkey = paramiko.RSAKey.from_private_key(io.StringIO(key_content))

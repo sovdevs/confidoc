@@ -1,14 +1,14 @@
 [
   {
     "id": "my_sftp_gateway",
-    "label": "Hetzner DRE server",
+    "label": "Production SFTP gateway",
     "type": "sftp",
     "enabled": true,
-    "host": "204.168.205.19",
+    "host": "sftp.example.internal",
     "port": 22,
     "username_env": "CONFIDOC_SFTP_USER",
     "private_key_path_env": "CONFIDOC_SFTP_KEY_PATH",
     "filename_patterns": ["*.pdf"],
-    "gateway_base": "/root/confidoc_gateway"
+    "gateway_base": "/srv/confidoc_gateway"
   }
 ]

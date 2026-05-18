@@ -2,41 +2,63 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from app.services.source_config_loader import load_sources, safe_source
 
 router = APIRouter()
 
 
-def _sftp_sources() -> list[dict]:
-    """Return all enabled SFTP sources that have a gateway_base configured."""
-    return [
+def _sftp_sources(request=None) -> list[dict]:
+    """Return enabled SFTP gateway sources from sources.json + current user's settings."""
+    from app.auth.sessions import COOKIE_NAME, get_username
+    from app.services import user_settings as us
+
+    static = [
         s for s in load_sources()
         if s.get("type") == "sftp"
         and s.get("enabled", True)
         and s.get("gateway_base")
     ]
+    # Merge user-configured sources (credentials stored encrypted in .enc)
+    user_sources: list[dict] = []
+    if request:
+        token = request.cookies.get(COOKIE_NAME)
+        username = get_username(token) if token else None
+        if username:
+            user_sources = [
+                s for s in us.get_sftp_sources(username)
+                if s.get("enabled", True) and s.get("gateway_base")
+            ]
+            # Remap user source credentials to inline format expected by SFTPGateway
+            for s in user_sources:
+                if s.get("private_key"):
+                    s["private_key_content_env"] = None  # will be read directly below
+                    s["_inline_key"] = s["private_key"]  # handled in SFTPGateway._connect
+
+    seen = {s["id"] for s in static}
+    merged = static + [s for s in user_sources if s["id"] not in seen]
+    return merged
 
 
-def _require_sftp_source(source_id: str) -> dict:
-    for s in _sftp_sources():
+def _require_sftp_source(source_id: str, request=None) -> dict:
+    for s in _sftp_sources(request):
         if s["id"] == source_id:
             return s
     raise HTTPException(404, f"SFTP gateway source '{source_id}' not found or not configured")
 
 
-def _make_gw(source_id: str):
+def _make_gw(source_id: str, request=None):
     from app.services.gateway_sftp import SFTPGateway
-    return SFTPGateway(_require_sftp_source(source_id))
+    return SFTPGateway(_require_sftp_source(source_id, request))
 
 
 # ── Sources ───────────────────────────────────────────────────────────────────
 
 @router.get("/api/gateway/sftp/sources")
-def list_sftp_gateway_sources():
+def list_sftp_gateway_sources(request: Request):
     """Return SFTP sources that have gateway_base configured (no credentials)."""
-    return {"sources": [safe_source(s) for s in _sftp_sources()]}
+    return {"sources": [safe_source(s) for s in _sftp_sources(request)]}
 
 
 # ── Per-source endpoints ──────────────────────────────────────────────────────
