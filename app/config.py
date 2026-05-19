@@ -8,16 +8,29 @@ from dotenv import load_dotenv
 # Try explicit paths first (Render Docker mounts secret files at the path
 # you configure, relative to the container root — not the WORKDIR).
 # Fall back to find_dotenv() for local dev.
-for _env_path in [
-    Path("/etc/secrets/.env"),          # Render Secret Files mount point
-    Path("/app/.env"),                  # Docker WORKDIR fallback
-    Path(__file__).parent.parent / ".env",  # local dev
-]:
-    if _env_path.exists():
-        load_dotenv(_env_path, override=False)
-        break
-else:
-    load_dotenv()
+def _load_env() -> None:
+    candidates = [
+        Path("/etc/secrets/.env"),              # Render Secret Files
+        Path("/app/.env"),                      # Docker WORKDIR
+        Path(__file__).parent.parent / ".env",  # local dev
+    ]
+    for p in candidates:
+        if p.exists():
+            try:
+                load_dotenv(p, override=False)
+            except Exception:
+                # dotenv parse warning — load individual lines as fallback
+                import re as _re
+                for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    m = _re.match(r'^([A-Za-z_][A-Za-z0-9_]*)=(.*)$', line)
+                    if m and m.group(1) not in os.environ:
+                        os.environ[m.group(1)] = m.group(2).strip('"').strip("'")
+            break
+
+_load_env()
 
 ROOT = Path(__file__).parent.parent
 # DATA_DIR env var lets cloud deployments point to a persistent mounted disk
