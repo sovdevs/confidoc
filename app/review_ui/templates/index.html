@@ -876,7 +876,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
         </div>
 
         <!-- ── Step 2: Choose LLM ─────────────────────────────── -->
-        <div id="wizard-steps-local">
+        <div id="wizard-step-model">
         <div class="wizard-step">
           <div class="wizard-step-label">2 — OCR model</div>
           <div class="form-row" style="gap:8px;margin-bottom:8px">
@@ -911,8 +911,10 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           <div id="ocr-model-current" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
         </div>
 
+        </div><!-- /#wizard-step-model -->
+
         <!-- ── Step 3: Run ────────────────────────────────────── -->
-        <div class="wizard-step" style="border-bottom:none;padding-bottom:0">
+        <div id="wizard-step-run" class="wizard-step" style="border-bottom:none;padding-bottom:0">
           <div class="wizard-step-label">3 — Extract</div>
           <button class="btn btn-primary" id="run-btn" disabled style="width:100%;justify-content:center;padding:11px;font-size:14px">
             Run OCR Extraction
@@ -921,7 +923,6 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             Select a source PDF above to continue
           </div>
         </div>
-        </div><!-- /#wizard-steps-local -->
 
       </div>
     </div>
@@ -4212,7 +4213,8 @@ document.getElementById("src-tab-demo")?.addEventListener("click", function() {
   this.classList.add("active");
   document.getElementById("demo-source-panel").style.display = "block";
   document.getElementById("server-source-panel").style.display = "none";
-  document.getElementById("wizard-steps-local").style.display = "none";
+  document.getElementById("wizard-step-model").style.display = "none";
+  document.getElementById("wizard-step-run").style.display = "";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "none";
 });
@@ -4222,7 +4224,8 @@ document.getElementById("src-tab-local")?.addEventListener("click", function() {
   this.classList.add("active");
   document.getElementById("demo-source-panel").style.display = "none";
   document.getElementById("server-source-panel").style.display = "none";
-  document.getElementById("wizard-steps-local").style.display = "";
+  document.getElementById("wizard-step-model").style.display = "";
+  document.getElementById("wizard-step-run").style.display = "";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "";
 });
@@ -4232,7 +4235,8 @@ document.getElementById("src-tab-server")?.addEventListener("click", async funct
   this.classList.add("active");
   document.getElementById("demo-source-panel").style.display = "none";
   document.getElementById("server-source-panel").style.display = "block";
-  document.getElementById("wizard-steps-local").style.display = "none";
+  document.getElementById("wizard-step-model").style.display = "none";
+  document.getElementById("wizard-step-run").style.display = "none";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "none";
   await refreshGatewayStatus();
