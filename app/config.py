@@ -8,7 +8,11 @@ from dotenv import load_dotenv
 # Try explicit paths first (Render Docker mounts secret files at the path
 # you configure, relative to the container root — not the WORKDIR).
 # Fall back to find_dotenv() for local dev.
-for _env_path in [Path("/app/.env"), Path(__file__).parent.parent / ".env"]:
+for _env_path in [
+    Path("/etc/secrets/.env"),          # Render Secret Files mount point
+    Path("/app/.env"),                  # Docker WORKDIR fallback
+    Path(__file__).parent.parent / ".env",  # local dev
+]:
     if _env_path.exists():
         load_dotenv(_env_path, override=False)
         break
