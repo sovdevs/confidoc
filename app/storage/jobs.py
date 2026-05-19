@@ -96,11 +96,12 @@ def load(job_id: str) -> Optional[Job]:
 
 def list_all() -> list[Job]:
     jobs = []
-    for p in sorted(settings.jobs_dir.glob("*.json"), reverse=True):
+    for p in settings.jobs_dir.glob("*.json"):
         try:
             jobs.append(Job.model_validate_json(p.read_text(encoding="utf-8")))
         except Exception:
             pass
+    jobs.sort(key=lambda j: j.created_at or "", reverse=True)
     return jobs
 
 
