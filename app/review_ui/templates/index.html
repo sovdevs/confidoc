@@ -4172,13 +4172,10 @@ async function loadDemoFiles() {
       opt.value = f; opt.textContent = f;
       sel.appendChild(opt);
     });
-    // Update hint based on whether demo key is available
     const hint = document.getElementById("demo-key-hint");
     if (hint) {
-      hint.innerHTML = _demoKeyAvailable
-        ? '&#10003; <strong>No API key required</strong> — demo key is pre-configured.'
-        : '&#9888; No demo key configured. You will need to enter an API key in step 2.';
-      hint.style.color = _demoKeyAvailable ? "#16a34a" : "var(--warning)";
+      hint.innerHTML = '&#10003; <strong>No API key required</strong> — uses pre-processed demo data.';
+      hint.style.color = "#16a34a";
     }
   } catch(_) {}
 }
@@ -4215,8 +4212,7 @@ document.getElementById("src-tab-demo")?.addEventListener("click", function() {
   this.classList.add("active");
   document.getElementById("demo-source-panel").style.display = "block";
   document.getElementById("server-source-panel").style.display = "none";
-  // Show step 2 (API key) only when no server-side demo key is configured
-  document.getElementById("wizard-steps-local").style.display = _demoKeyAvailable ? "none" : "";
+  document.getElementById("wizard-steps-local").style.display = "none";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "none";
 });
