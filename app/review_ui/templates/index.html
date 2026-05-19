@@ -1027,6 +1027,8 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
         </div>
       </div>
 
+      <div id="content-row" style="flex:1;display:flex;overflow:hidden">
+      <div id="content-col" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
       <div class="detail-body">
         <div class="entity-panel">
           <h3>
@@ -1041,14 +1043,6 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           <div id="text-preview"></div>
         </div>
 
-        <div id="pdf-panel">
-          <div id="pdf-panel-bar">
-            <div class="z1-dot"></div>
-            <span>Original PDF — Zone 1</span>
-            <button onclick="closePdfPanel()" style="margin-left:auto;background:none;border:none;color:#e07070;cursor:pointer;font-size:15px;line-height:1">✕</button>
-          </div>
-          <iframe id="pdf-panel-iframe" src="" title="Original PDF"></iframe>
-        </div>
       </div>
 
       <!-- Inline OCR edit panel (collapsible drawer, shown in Entities view) -->
@@ -1347,6 +1341,18 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
         </div>
       </div>
+      </div><!-- /#content-col -->
+
+      <!-- PDF side panel — flex sibling of content-col, visible across all tabs -->
+      <div id="pdf-panel">
+        <div id="pdf-panel-bar">
+          <div class="z1-dot"></div>
+          <span>Original PDF — Zone 1</span>
+          <button onclick="closePdfPanel()" style="margin-left:auto;background:none;border:none;color:#e07070;cursor:pointer;font-size:15px;line-height:1">✕</button>
+        </div>
+        <iframe id="pdf-panel-iframe" src="" title="Original PDF"></iframe>
+      </div>
+      </div><!-- /#content-row -->
 
       <div class="export-bar" id="export-bar" style="display:none">
         <span id="export-bar-label" style="font-size:13px;color:var(--muted)">Exports ready:</span>
