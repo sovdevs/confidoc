@@ -298,16 +298,16 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
   display: none;
   position: fixed; z-index: 99999;
   max-width: 220px;
-  background: #12141f; border: 2px solid var(--border);
+  background: #1a1d2e; border: 2px solid #5a5d7a;
   border-radius: 8px; padding: 8px 12px;
   font-size: 12px; color: #e2e4f0; line-height: 1.5;
   pointer-events: none;
-  box-shadow: 0 4px 20px rgba(0,0,0,.7);
+  box-shadow: 0 4px 20px rgba(0,0,0,.8);
 }
 #ui-tooltip.tip-show   { display: block; }
-#ui-tooltip.tip-red    { border-color: #e05a5a; }
-#ui-tooltip.tip-purple { border-color: #9b59b6; }
-#ui-tooltip.tip-blue   { border-color: #5b7cf6; }
+#ui-tooltip.tip-red    { border-color: #e05a5a; background: #1e1010; }
+#ui-tooltip.tip-purple { border-color: #9b59b6; background: #18102a; }
+#ui-tooltip.tip-blue   { border-color: #5b7cf6; background: #101828; }
 
 /* ── Floating entity picker ──────────────────────────────── */
 #entity-picker { position: fixed; z-index: 200; background: var(--surface);
@@ -1673,10 +1673,10 @@ function renderViewTabs(j) {
   const canPolicy    = ["reviewing","approved","normalizing","normalized","done"].includes(j.status);
   const canMapping   = !!j.mapping_path;
 
-  let html = `<button class="view-tab ${viewMode==="entities"?"active":""}" data-view="entities">Entities</button>`;
-  if (canNormalize) html += `<button class="view-tab ${viewMode==="ocr"?"active":""}" data-view="ocr">OCR Check <span style="font-size:9px;font-weight:400;opacity:.5">(optional)</span></button>`;
-  if (canMapping)   html += `<button class="view-tab ${viewMode==="mapping"?"active":""}" data-view="mapping">🔑 Mapping</button>`;
-  if (canPolicy)    html += `<button class="view-tab ${viewMode==="policy"?"active":""}" data-view="policy">Export</button>`;
+  let html = `<button class="view-tab ${viewMode==="entities"?"active":""}" data-view="entities" data-tip="Review detected PII entities — approve or dismiss each one before exporting">Entities</button>`;
+  if (canNormalize) html += `<button class="view-tab ${viewMode==="ocr"?"active":""}" data-view="ocr" data-tip="Optional — correct OCR artefacts in the extracted text before it reaches the export">OCR Check <span style="font-size:9px;font-weight:400;opacity:.5">(optional)</span></button>`;
+  if (canMapping)   html += `<button class="view-tab ${viewMode==="mapping"?"active":""}" data-view="mapping" data-tip="Zone 1 only — view the token mapping between pseudonymized placeholders and original values" data-tip-color="red">🔑 Mapping</button>`;
+  if (canPolicy)    html += `<button class="view-tab ${viewMode==="policy"?"active":""}" data-view="policy" data-tip="Generate a policy-compliant export package or send to an LLM — no PHI included" data-tip-color="purple">Export</button>`;
   tabs.innerHTML = html;
   tabs.querySelectorAll(".view-tab").forEach(btn =>
     btn.addEventListener("click", () => { viewMode = btn.dataset.view; renderDetail(); })
