@@ -4215,7 +4215,8 @@ document.getElementById("src-tab-demo")?.addEventListener("click", function() {
   this.classList.add("active");
   document.getElementById("demo-source-panel").style.display = "block";
   document.getElementById("server-source-panel").style.display = "none";
-  document.getElementById("wizard-steps-local").style.display = "none";
+  // Show step 2 (API key) only when no server-side demo key is configured
+  document.getElementById("wizard-steps-local").style.display = _demoKeyAvailable ? "none" : "";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "none";
 });
