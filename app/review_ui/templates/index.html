@@ -1006,7 +1006,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               </div>
             </div>
             <div style="display:flex;gap:8px">
-              <button class="btn btn-ghost btn-sm" id="do-import-btn">Import artifact</button>
+              <button class="btn btn-ghost btn-sm" id="do-import-btn" data-tip="Decrypt and import this export artifact using the Zone 1 mapping key — restores original patient text" data-tip-color="purple">Import artifact</button>
               <button class="btn btn-ghost btn-sm" id="cancel-import-btn">Cancel</button>
             </div>
           </div>
@@ -1077,8 +1077,8 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           </div>
           <div style="padding:8px 16px;display:flex;gap:8px;align-items:center;border-top:1px solid var(--border);flex-shrink:0;background:var(--surface)">
             <span id="ocr-inline-warning" class="token-warning">⚠ Token mismatch</span>
-            <button class="btn btn-ghost btn-sm" id="btn-inline-autofix">⚡ Auto-fix</button>
-            <button class="btn btn-ghost btn-sm" id="btn-inline-save">Save draft</button>
+            <button class="btn btn-ghost btn-sm" id="btn-inline-autofix" data-tip="Automatically correct common OCR artefacts — repeated spaces, broken hyphens, garbled characters">⚡ Auto-fix</button>
+            <button class="btn btn-ghost btn-sm" id="btn-inline-save" data-tip="Save your edits as a draft without approving — you can return and edit again">Save draft</button>
             <span id="ocr-inline-save-status" style="font-size:11px;color:var(--muted)"></span>
             <button class="btn btn-primary btn-sm" id="btn-inline-approve-ocr" style="margin-left:auto" data-tip="Save your edits and mark OCR correction as approved — unlocks Export tab" data-tip-color="red">✓ Approve OCR</button>
           </div>
@@ -1101,12 +1101,12 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           </div>
         </div>
         <div class="ocr-bar">
-          <button class="btn btn-ghost btn-sm" id="btn-auto-fix">⚡ Auto-fix unambiguous</button>
-          <button class="btn btn-ghost btn-sm" id="btn-save-draft">Save draft</button>
+          <button class="btn btn-ghost btn-sm" id="btn-auto-fix" data-tip="Automatically correct unambiguous OCR errors that don't affect pseudonymization tokens">⚡ Auto-fix unambiguous</button>
+          <button class="btn btn-ghost btn-sm" id="btn-save-draft" data-tip="Save your corrections as a draft without approving — you can continue editing later">Save draft</button>
           <span id="ocr-save-status" style="font-size:12px;color:var(--muted)"></span>
           <button class="btn btn-ghost btn-sm" id="btn-back-entities" style="margin-left:auto" title="Switch to Entities tab to add/edit PII">← Entities</button>
-          <button class="btn btn-ghost btn-sm" id="btn-reopen-normalized" title="Reopen for editing">↩ Reopen</button>
-          <button class="btn btn-primary btn-sm" id="btn-approve-normalized">✓ Approve</button>
+          <button class="btn btn-ghost btn-sm" id="btn-reopen-normalized" data-tip="Reopen the OCR Check editor to make further corrections">↩ Reopen</button>
+          <button class="btn btn-primary btn-sm" id="btn-approve-normalized" data-tip="Approve the corrected text — this becomes the final version used in all exports" data-tip-color="red">✓ Approve</button>
         </div>
       </div>
 
@@ -1144,7 +1144,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
             <div class="form-group">
               <label>Export purpose</label>
-              <select id="pe-purpose">
+              <select id="pe-purpose" data-tip="Sets the anonymization profile — determines which fields are retained, generalized, or removed">
                 <option value="translation">Translation package</option>
                 <option value="llm_clinical">LLM – Clinical Summary</option>
                 <option value="llm_extraction">LLM – Feature Extraction</option>
@@ -1156,7 +1156,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
             <div class="form-group">
               <label>Recipient / destination</label>
-              <select id="pe-recipient">
+              <select id="pe-recipient" data-tip="Who will receive this document — determines the minimum privacy level required by the policy engine">
                 <option value="internal">Internal user</option>
                 <option value="trusted_vendor">Trusted vendor</option>
                 <option value="local_llm">Local LLM</option>
@@ -1168,7 +1168,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
             <div class="form-group">
               <label>Privacy level</label>
-              <select id="pe-privacy">
+              <select id="pe-privacy" data-tip="Override the auto-recommended privacy level — higher strictness removes more context but reduces re-identification risk">
                 <option value="recommended">Recommended</option>
                 <option value="more_readable">More readable</option>
                 <option value="more_private">More private</option>
@@ -1203,7 +1203,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
                 Download the reviewed Markdown with pseudonymization placeholders intact. May still contain reversible tokens. <strong style="color:#e07070">Do not send externally.</strong>
               </div>
-              <a id="pe-zone1-dl" href="#" class="btn btn-ghost btn-sm btn-block" style="border-color:var(--zone1-border)">
+              <a id="pe-zone1-dl" href="#" class="btn btn-ghost btn-sm btn-block" style="border-color:var(--zone1-border)" data-tip="Download the pseudonymized markdown for internal review only — contains reversible tokens, never send externally" data-tip-color="red">
                 ↓ Reviewed Markdown (Zone 1 debug)
               </a>
             </div>
@@ -1384,7 +1384,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
   <div class="label-grid" id="picker-labels"></div>
   <div class="repl-row">
     <input class="repl-input" id="picker-repl" placeholder="Replacement token, e.g. [NAME]">
-    <button class="btn btn-primary btn-sm" id="picker-confirm">Add</button>
+    <button class="btn btn-primary btn-sm" id="picker-confirm" data-tip="Add this span as a new PII entity with the token shown above" data-tip-color="blue">Add</button>
   </div>
 </div>
 
@@ -1736,7 +1736,7 @@ function renderActions(j) {
   } else if (j.status === "normalized") {
     html = `
       <span style="font-size:12px;color:var(--success)">✓ Normalized</span>
-      <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr">↩ Edit OCR Check</button>
+      <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr" data-tip="Reopen the OCR Check editor to make further corrections">↩ Edit OCR Check</button>
     `;
   } else if (j.status === "exporting") {
     html = `<span class="proc-badge"><span class="spinner"></span>Exporting…</span>`;
@@ -1748,7 +1748,7 @@ function renderActions(j) {
       <span style="font-size:12px;color:var(--muted)">${approved}/${total} approved</span>
       <button class="btn btn-ghost btn-sm" id="btn-approve-all" data-tip="Approve all detected entities and generate pseudonymized export. This finalises Zone 1 review." data-tip-color="red">Approve All</button>
       <button class="btn btn-ghost btn-sm" id="btn-redetect" data-tip="Re-run entity detection — useful if you edited the extracted text">↺ Re-detect</button>
-      <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr">↩ Edit OCR Check</button>
+      <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr" data-tip="Reopen the OCR Check editor to make further corrections">↩ Edit OCR Check</button>
     `;
   } else if (j.status === "failed") {
     html = `<span style="font-size:12px;color:var(--danger)">✗ Failed</span>`;
@@ -1830,15 +1830,15 @@ function renderEntities(j) {
       </div>
       ${reviewing ? `
       <div class="entity-actions">
-        <button class="btn btn-success btn-sm" data-action="approve" data-id="${e.id}">✓ Approve</button>
-        <button class="btn btn-danger  btn-sm" data-action="dismiss" data-id="${e.id}">✗ Dismiss</button>
-        <button class="btn btn-ghost   btn-sm" data-action="edit"    data-id="${e.id}" style="margin-left:auto">Edit</button>
-        <button class="btn btn-ghost   btn-sm" data-action="delete"  data-id="${e.id}" title="Remove entirely — allows re-annotation of this span" style="color:var(--danger);padding:4px 7px">🗑</button>
+        <button class="btn btn-success btn-sm" data-action="approve" data-id="${e.id}" data-tip="Confirm this entity should be pseudonymized — replaces it with a stable token in the export" data-tip-color="blue">✓ Approve</button>
+        <button class="btn btn-danger  btn-sm" data-action="dismiss" data-id="${e.id}" data-tip="Mark as not PII — this text will remain unchanged in the export">✗ Dismiss</button>
+        <button class="btn btn-ghost   btn-sm" data-action="edit"    data-id="${e.id}" style="margin-left:auto" data-tip="Edit the replacement token for this entity">Edit</button>
+        <button class="btn btn-ghost   btn-sm" data-action="delete"  data-id="${e.id}" style="color:var(--danger);padding:4px 7px" data-tip="Remove this detection entirely — the span can be re-annotated by selecting text">🗑</button>
       </div>
       <div class="entity-edit-row" id="edit-${e.id}">
         <input type="text" placeholder="${escHtml(e.replacement)}" value="${escHtml(e.replacement)}">
-        <button class="btn btn-primary btn-sm" data-action="save" data-id="${e.id}">Save</button>
-        <button class="btn btn-ghost   btn-sm" data-action="cancel-edit" data-id="${e.id}">✕</button>
+        <button class="btn btn-primary btn-sm" data-action="save" data-id="${e.id}" data-tip="Save the new replacement token for this entity">Save</button>
+        <button class="btn btn-ghost   btn-sm" data-action="cancel-edit" data-id="${e.id}" data-tip="Cancel editing and keep the original token">✕</button>
       </div>
       ` : ""}
     </div>
