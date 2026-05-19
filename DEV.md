@@ -315,20 +315,46 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ### Render deployment
 
-Two options for persisting `users.json`:
+**Option A — `CONFIDOC_DEMO_USERS` env var (easiest for demo):**
 
-**Option A — persistent disk (recommended):**
-Mount Render's disk at `/data`. Users created via the one-off shell survive restarts.
+Add to Render secret file:
+```
+CONFIDOC_DEMO_USERS=alice:password123,bob:password456
+```
+Users are created on first startup if they don't exist. Existing users are never
+overwritten, so it's safe to leave this set permanently. Passwords are visible in
+the Render dashboard — use strong passwords and treat this as demo-only.
+
+**Option B — one-off shell (recommended for production):**
 ```bash
-# In Render shell after first deploy:
+# In Render Shell tab after deploy:
+uv run confidoc-auth create-user <username> --password <password>
+```
+Users are persisted to the disk mount at `/data/auth/users.json`.
+Requires a persistent disk mounted at `/data`.
+
+**Option C — interactive CLI (local only):**
+```bash
 uv run confidoc-auth create-user <username>
+# prompts for password
 ```
 
-**Option B — bake into image (low-security environments only):**
-Create the user locally, copy `data/auth/users.json` into the Docker image via `Dockerfile`.
-Not recommended — the hash is visible to anyone with image access.
-
 `CONFIDOC_AUTH_ENABLED=false` disables the middleware entirely (local dev only).
+
+### Render env vars for SFTP gateway
+
+```
+CONFIDOC_SFTP_USER=confidoc
+CONFIDOC_SFTP_KEY=-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAA...
+-----END OPENSSH PRIVATE KEY-----
+```
+
+Render secret files support multiline values — paste the full PEM block as-is.
+The `sources.json` entry references it via `"private_key_content_env": "CONFIDOC_SFTP_KEY"`.
+
+> **Avoid `private_key_path_env`** on Render — it requires a key file on disk, which
+> doesn't survive restarts without a persistent disk. Key content in an env var is safer.
 
 ## Deployment
 

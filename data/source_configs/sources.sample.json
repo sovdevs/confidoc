@@ -19,11 +19,10 @@
     "host": "sftp.example.com",
     "port": 22,
     "username_env": "CONFIDOC_SFTP_USER",
-    "private_key_path_env": "CONFIDOC_SFTP_KEY_PATH",
-    "private_key_content_env": "CONFIDOC_SFTP_KEY_CONTENT",
+    "private_key_content_env": "CONFIDOC_SFTP_KEY",
     "filename_patterns": ["*.pdf", "*.docx"],
-    "gateway_base": "/home/confidoc/gateway",
-    "_note": "gateway_base enables SFTP Gateway mode. Remote structure: incoming/ processing/ processed/ failed/ exports/"
+    "gateway_base": "/srv/confidoc_gateway",
+    "_note": "Use private_key_content_env (PEM text in env var) for cloud deployments like Render. Use private_key_path_env only when a key file is accessible on disk. gateway_base enables SFTP Gateway mode."
   },
   {
     "id": "clinic_nextcloud",

@@ -75,6 +75,36 @@ def _check_auth_config() -> None:
         )
 
 
+def _provision_demo_users() -> None:
+    """Create users from CONFIDOC_DEMO_USERS=user1:pass1,user2:pass2 if not present.
+
+    Existing users are never overwritten — safe to leave set permanently.
+    Passwords are visible in the Render env-var dashboard; use for demo only.
+    """
+    import os as _os
+    spec = _os.getenv("CONFIDOC_DEMO_USERS", "").strip()
+    if not spec:
+        return
+    from app.auth.users import create_user, get_user
+    for pair in spec.split(","):
+        pair = pair.strip()
+        if ":" not in pair:
+            continue
+        username, _, password = pair.partition(":")
+        username = username.strip()
+        password = password.strip()
+        if not username or not password:
+            continue
+        if get_user(username):
+            continue  # never overwrite existing users
+        try:
+            create_user(username, password)
+            logger.info("Auto-provisioned demo user: %s", username)
+        except ValueError as exc:
+            logger.warning("Could not provision demo user %s: %s", username, exc)
+
+
+_provision_demo_users()
 _check_auth_config()
 
 app = FastAPI(title="Confidoc — Secure Document Pipeline")

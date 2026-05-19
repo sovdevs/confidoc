@@ -23,11 +23,20 @@ def main() -> None:
 
     if cmd == "create-user":
         if len(args) < 2:
-            print("Usage: confidoc-auth create-user <username>")
+            print("Usage: confidoc-auth create-user <username> [--password <pw>]")
             sys.exit(1)
         username = args[1]
-        password = getpass.getpass(f"Password for '{username}': ")
-        confirm  = getpass.getpass("Confirm password: ")
+        # Support --password flag for non-interactive use (e.g. Render one-off shell)
+        if "--password" in args:
+            idx = args.index("--password")
+            if idx + 1 >= len(args):
+                print("--password requires a value")
+                sys.exit(1)
+            password = args[idx + 1]
+            confirm  = password
+        else:
+            password = getpass.getpass(f"Password for '{username}': ")
+            confirm  = getpass.getpass("Confirm password: ")
         if password != confirm:
             print("Passwords do not match.")
             sys.exit(1)
