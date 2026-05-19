@@ -303,9 +303,9 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
   box-shadow: 0 4px 18px rgba(0,0,0,.5);
 }
 #ui-tooltip.tip-show  { opacity: 1; }
-#ui-tooltip.tip-red   { border-color: var(--danger);  box-shadow: 0 4px 18px rgba(224,90,90,.18); }
-#ui-tooltip.tip-purple{ border-color: #9b59b6;        box-shadow: 0 4px 18px rgba(155,89,182,.18); }
-#ui-tooltip.tip-blue  { border-color: var(--accent);  box-shadow: 0 4px 18px rgba(91,124,246,.18); }
+#ui-tooltip.tip-red   { border-color: var(--danger); }
+#ui-tooltip.tip-purple{ border-color: #9b59b6; }
+#ui-tooltip.tip-blue  { border-color: var(--accent); }
 
 /* ── Floating entity picker ──────────────────────────────── */
 #entity-picker { position: fixed; z-index: 200; background: var(--surface);
@@ -4345,49 +4345,46 @@ document.getElementById("demo-stop-btn")?.addEventListener("click", async () => 
 (function() {
   const el = document.getElementById("ui-tooltip");
   if (!el) return;
-  let _timer = null;
+  let _timer = null, _cur = null;
 
-  function show(target) {
-    const tip = target.dataset.tip;
-    if (!tip) return;
-    el.textContent = tip;
-    el.className = "";
-    const c = target.dataset.tipColor || "";
-    if (c) el.classList.add("tip-" + c);
+  function show(t) {
+    _cur = t;
+    el.textContent = t.dataset.tip;
+    // set color class (no opacity manipulation — pure CSS transition)
+    const c = t.dataset.tipColor;
+    el.className = c ? "tip-" + c : "";
 
-    const r = target.getBoundingClientRect();
-    const gap = 8;
-    el.style.opacity = "0";
-    el.style.display = "block";
-    const tw = el.offsetWidth, th = el.offsetHeight;
-
-    // prefer above, fall back to below
-    let top = r.top - th - gap;
-    if (top < 6) top = r.bottom + gap;
-    // centre horizontally, clamp to viewport
-    let left = r.left + r.width / 2 - tw / 2;
-    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
-
-    el.style.top     = top  + "px";
-    el.style.left    = left + "px";
-    el.style.opacity = "";   // clear inline override — let CSS class control opacity
+    // measure with content set, opacity still 0 via CSS
+    const tw = el.offsetWidth || 210;
+    const th = el.offsetHeight || 36;
+    const r  = t.getBoundingClientRect();
+    const top  = r.top - th - 8 < 6 ? r.bottom + 8 : r.top - th - 8;
+    const left = Math.max(8, Math.min(r.left + r.width / 2 - tw / 2, innerWidth - tw - 8));
+    el.style.top  = top  + "px";
+    el.style.left = left + "px";
     el.classList.add("tip-show");
   }
 
   function hide() {
+    clearTimeout(_timer);
     el.classList.remove("tip-show");
+    _cur = null;
   }
 
   document.addEventListener("mouseover", e => {
     const t = e.target.closest("[data-tip]");
+    if (t === _cur) return;
     clearTimeout(_timer);
-    if (t) _timer = setTimeout(() => show(t), 320);
-    else hide();
+    if (_cur) hide();
+    if (t) _timer = setTimeout(() => show(t), 300);
   });
   document.addEventListener("mouseout", e => {
-    if (!e.target.closest("[data-tip]")) { clearTimeout(_timer); hide(); }
+    const t = e.target.closest("[data-tip]");
+    if (t && !t.contains(e.relatedTarget)) { clearTimeout(_timer); hide(); }
   });
-  document.addEventListener("click", () => { clearTimeout(_timer); hide(); });
+  document.addEventListener("click",   hide);
+  document.addEventListener("scroll",  hide, true);
+  document.addEventListener("keydown", hide);
 })();
 </script>
 </body>
