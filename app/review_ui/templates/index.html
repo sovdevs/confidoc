@@ -4368,8 +4368,9 @@ document.getElementById("demo-stop-btn")?.addEventListener("click", async () => 
     let left = r.left + r.width / 2 - tw / 2;
     left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
 
-    el.style.top  = top  + "px";
-    el.style.left = left + "px";
+    el.style.top     = top  + "px";
+    el.style.left    = left + "px";
+    el.style.opacity = "";   // clear inline override — let CSS class control opacity
     el.classList.add("tip-show");
   }
 
