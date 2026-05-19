@@ -293,6 +293,20 @@ mark.highlight:hover { background: #3a3a18; }
 mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
                               border-bottom: 2px dashed #6aaa40; }
 
+/* ── Tooltips ────────────────────────────────────────────── */
+#ui-tooltip {
+  position: fixed; z-index: 9999; max-width: 210px;
+  background: #12141f; border: 1.5px solid var(--border);
+  border-radius: 8px; padding: 7px 11px;
+  font-size: 12px; color: var(--text); line-height: 1.45;
+  pointer-events: none; opacity: 0; transition: opacity .15s;
+  box-shadow: 0 4px 18px rgba(0,0,0,.5);
+}
+#ui-tooltip.tip-show  { opacity: 1; }
+#ui-tooltip.tip-red   { border-color: var(--danger);  box-shadow: 0 4px 18px rgba(224,90,90,.18); }
+#ui-tooltip.tip-purple{ border-color: #9b59b6;        box-shadow: 0 4px 18px rgba(155,89,182,.18); }
+#ui-tooltip.tip-blue  { border-color: var(--accent);  box-shadow: 0 4px 18px rgba(91,124,246,.18); }
+
 /* ── Floating entity picker ──────────────────────────────── */
 #entity-picker { position: fixed; z-index: 200; background: var(--surface);
                  border: 1px solid var(--border); border-radius: 10px;
@@ -522,8 +536,8 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
   <span>Secure Document Pipeline</span>
   <div id="header-user" style="display:none">
     <span id="header-username" style="font-size:12px;color:var(--muted)"></span>
-    <button class="btn btn-ghost btn-sm" id="btn-settings" title="Settings">⚙</button>
-    <button class="btn btn-ghost btn-sm" id="btn-logout">Logout</button>
+    <button class="btn btn-ghost btn-sm" id="btn-settings" data-tip="Configure LLM models, API keys, and SFTP gateway credentials">⚙</button>
+    <button class="btn btn-ghost btn-sm" id="btn-logout" data-tip="Sign out of your session">Logout</button>
   </div>
 </header>
 
@@ -594,7 +608,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           </select>
           <input id="st-key-value" type="password" placeholder="sk-… or AIza…" autocomplete="off"
                  style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12px;outline:none">
-          <button class="btn btn-ghost btn-sm" id="btn-st-save-key">Save</button>
+          <button class="btn btn-ghost btn-sm" id="btn-st-save-key" data-tip="Encrypt and store this API key — it will be used automatically for LLM calls on this account">Save</button>
         </div>
         <div id="st-keys-status" style="font-size:11px;color:var(--muted)"></div>
       </div>
@@ -616,14 +630,14 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           <textarea id="st-sftp-key" placeholder="SSH private key (PEM) — stored encrypted" rows="4"
             style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:11px;font-family:monospace;resize:vertical;outline:none;width:100%"></textarea>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-ghost btn-sm" id="btn-st-save-sftp">Save SFTP source</button>
+            <button class="btn btn-ghost btn-sm" id="btn-st-save-sftp" data-tip="Save this SFTP gateway connection — credentials are encrypted and stored per-user, never in config files" data-tip-color="purple">Save SFTP source</button>
             <span id="st-sftp-status" style="font-size:11px;color:var(--muted);align-self:center"></span>
           </div>
         </div>
       </div>
 
       <div style="display:flex;gap:8px;padding-top:8px;border-top:1px solid var(--border)">
-        <button class="btn btn-primary btn-sm" id="btn-st-save-settings">Save model settings</button>
+        <button class="btn btn-primary btn-sm" id="btn-st-save-settings" data-tip="Save your default LLM provider and model — these override the server defaults for your account">Save model settings</button>
         <span id="st-save-status" style="font-size:11px;color:var(--muted);align-self:center"></span>
       </div>
     </div>
@@ -634,7 +648,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
   <aside>
     <div class="sidebar-head">
       <h2>Jobs</h2>
-      <button class="btn btn-primary btn-block" id="new-btn">
+      <button class="btn btn-primary btn-block" id="new-btn" data-tip="Open the intake wizard — upload a local PDF or pull files from a remote SFTP gateway">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
@@ -643,7 +657,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
     </div>
     <div id="job-list"><div class="empty" style="padding:40px 0"><div class="spinner"></div></div></div>
     <div style="padding:10px 16px;border-top:1px solid var(--border)">
-      <button class="btn btn-ghost btn-block btn-sm" id="import-btn">↑ Rehydrate</button>
+      <button class="btn btn-ghost btn-block btn-sm" id="import-btn" data-tip="Restore a pseudonymized export back to original text using a secure Zone 1 mapping key" data-tip-color="purple">↑ Rehydrate</button>
     </div>
     <!-- Demo capture panel (shown only when CONFIDOC_DEMO_CAPTURE=true) -->
     <div id="demo-panel" style="display:none;padding:10px 16px;border-top:1px solid var(--border);background:rgba(0,100,200,0.06)">
@@ -747,9 +761,9 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
               <!-- Action buttons -->
               <div style="display:flex;gap:6px;margin-bottom:8px">
-                <button class="btn btn-ghost btn-sm" id="btn-gw-scan">⟳ Scan</button>
-                <button class="btn btn-ghost btn-sm" id="btn-gw-process-next" disabled>▶ Process Next</button>
-                <button class="btn btn-primary btn-sm" id="btn-gw-process-all" disabled>▶▶ Process All</button>
+                <button class="btn btn-ghost btn-sm" id="btn-gw-scan" data-tip="List files currently waiting in the local incoming/ folder">⟳ Scan</button>
+                <button class="btn btn-ghost btn-sm" id="btn-gw-process-next" disabled data-tip="Pull and process one file in the foreground — waits for completion before returning">▶ Process Next</button>
+                <button class="btn btn-primary btn-sm" id="btn-gw-process-all" disabled data-tip="Process all queued files as a background batch — jobs appear in the sidebar as each completes. Always requires manual review." data-tip-color="purple">▶▶ Process All</button>
               </div>
 
               <div id="gw-action-msg" style="display:none;font-size:12px;margin-bottom:8px;padding:5px 8px;border-radius:5px"></div>
@@ -786,8 +800,8 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
                 <select id="sftp-gw-source-select" style="flex:1;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px">
                   <option value="">— no SFTP gateway sources configured —</option>
                 </select>
-                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-test">Test</button>
-                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-ensure">Ensure dirs</button>
+                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-test" data-tip="Test SSH connection to the remote SFTP gateway server">Test</button>
+                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-ensure" data-tip="Create the incoming/ processing/ processed/ failed/ exports/ folder structure on the remote server if missing">Ensure dirs</button>
               </div>
 
               <div id="sftp-gw-test-msg" style="display:none;font-size:12px;margin-bottom:8px;padding:5px 8px;border-radius:5px"></div>
@@ -803,9 +817,9 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
               <!-- Action buttons -->
               <div style="display:flex;gap:6px;margin-bottom:8px">
-                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-scan">⟳ Scan</button>
-                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-process-next" disabled>▶ Process Next</button>
-                <button class="btn btn-primary btn-sm" id="btn-sftp-gw-process-all" disabled>▶▶ Process All</button>
+                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-scan" data-tip="List PDF files waiting in the remote incoming/ folder">⟳ Scan</button>
+                <button class="btn btn-ghost btn-sm" id="btn-sftp-gw-process-next" disabled data-tip="Download and process one file from the remote server in the foreground">▶ Process Next</button>
+                <button class="btn btn-primary btn-sm" id="btn-sftp-gw-process-all" disabled data-tip="Download and process all remote files as a background batch — jobs appear in the sidebar as each completes" data-tip-color="purple">▶▶ Process All</button>
               </div>
 
               <div id="sftp-gw-action-msg" style="display:none;font-size:12px;margin-bottom:8px;padding:5px 8px;border-radius:5px"></div>
@@ -1016,7 +1030,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
           <div class="view-tabs" id="view-tabs"></div>
-          <button class="btn btn-ghost btn-sm" id="view-pdf-btn" style="display:none" title="Toggle PDF side panel">
+          <button class="btn btn-ghost btn-sm" id="view-pdf-btn" style="display:none" data-tip="Open the original PDF alongside the anonymized text for side-by-side review">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
@@ -1066,7 +1080,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             <button class="btn btn-ghost btn-sm" id="btn-inline-autofix">⚡ Auto-fix</button>
             <button class="btn btn-ghost btn-sm" id="btn-inline-save">Save draft</button>
             <span id="ocr-inline-save-status" style="font-size:11px;color:var(--muted)"></span>
-            <button class="btn btn-primary btn-sm" id="btn-inline-approve-ocr" style="margin-left:auto">✓ Approve OCR</button>
+            <button class="btn btn-primary btn-sm" id="btn-inline-approve-ocr" style="margin-left:auto" data-tip="Save your edits and mark OCR correction as approved — unlocks Export tab" data-tip-color="red">✓ Approve OCR</button>
           </div>
         </details>
       </div>
@@ -1178,7 +1192,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               <div style="font-size:11px;color:var(--muted);margin-top:3px">Required for TMX generation</div>
             </div>
 
-            <button class="btn btn-primary btn-block" id="pe-prepare-btn" style="margin-top:4px">
+            <button class="btn btn-primary btn-block" id="pe-prepare-btn" style="margin-top:4px" data-tip="Run the policy engine to generate a compliance-audited anonymization package for this document" data-tip-color="purple">
               Prepare Export Package
             </button>
             <div id="pe-error" style="display:none;font-size:12px;color:var(--danger);margin-top:8px;line-height:1.5"></div>
@@ -1303,7 +1317,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               <strong style="color:var(--text)">Privacy</strong> — Only PII-public / transformed markdown is sent to the selected LLM. Original PDF and encrypted mappings are never sent.
             </div>
 
-            <button class="btn btn-primary btn-block" id="llm-run-btn">▶ Run with LLM</button>
+            <button class="btn btn-primary btn-block" id="llm-run-btn" data-tip="Send the pseudonymized document to an LLM with your chosen prompt — no raw patient data leaves Zone 1" data-tip-color="purple">▶ Run with LLM</button>
             <div id="llm-run-error" style="display:none;font-size:12px;color:var(--danger);line-height:1.5"></div>
 
             <div style="font-size:10px;color:var(--muted);line-height:1.6;border-top:1px solid var(--border);padding-top:10px">
@@ -1712,9 +1726,9 @@ function renderActions(j) {
     const total = j.entities.length;
     html = `
       <span style="font-size:12px;color:var(--muted)">${approved}/${total} approved</span>
-      <button class="btn btn-ghost btn-sm" id="btn-redetect" title="Re-run with improved patterns">↺ Re-detect</button>
-      <button class="btn btn-ghost btn-sm" id="btn-approve-all">Approve All</button>
-      ${j.reviewed_md ? `<button class="btn btn-ghost btn-sm" id="btn-normalize">OCR Check</button>` : ""}
+      <button class="btn btn-ghost btn-sm" id="btn-redetect" data-tip="Re-run entity detection — useful if you edited the extracted text">↺ Re-detect</button>
+      <button class="btn btn-ghost btn-sm" id="btn-approve-all" data-tip="Approve all detected entities and generate pseudonymized export. This finalises Zone 1 review." data-tip-color="red">Approve All</button>
+      ${j.reviewed_md ? `<button class="btn btn-ghost btn-sm" id="btn-normalize" data-tip="Run OCR quality check — detects garbled text, missing tokens, and formatting issues">OCR Check</button>` : ""}
     `;
   } else if (j.status === "normalizing") {
     html = `<span style="font-size:12px;color:var(--warning)">OCR Check in progress</span>`;
@@ -1731,8 +1745,8 @@ function renderActions(j) {
     html = `
       <span style="font-size:12px;color:var(--success)">✓ Complete</span>
       <span style="font-size:12px;color:var(--muted)">${approved}/${total} approved</span>
-      <button class="btn btn-ghost btn-sm" id="btn-approve-all">Approve All</button>
-      <button class="btn btn-ghost btn-sm" id="btn-redetect">↺ Re-detect</button>
+      <button class="btn btn-ghost btn-sm" id="btn-approve-all" data-tip="Approve all detected entities and generate pseudonymized export. This finalises Zone 1 review." data-tip-color="red">Approve All</button>
+      <button class="btn btn-ghost btn-sm" id="btn-redetect" data-tip="Re-run entity detection — useful if you edited the extracted text">↺ Re-detect</button>
       <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr">↩ Edit OCR Check</button>
     `;
   } else if (j.status === "failed") {
@@ -4325,6 +4339,56 @@ document.getElementById("demo-stop-btn")?.addEventListener("click", async () => 
     showToast(e.message || "Failed", "error");
   }
 });
+
+// ── Tooltip engine ────────────────────────────────────────
+(function() {
+  const el = document.getElementById("ui-tooltip");
+  if (!el) return;
+  let _timer = null;
+
+  function show(target) {
+    const tip = target.dataset.tip;
+    if (!tip) return;
+    el.textContent = tip;
+    el.className = "";
+    const c = target.dataset.tipColor || "";
+    if (c) el.classList.add("tip-" + c);
+
+    const r = target.getBoundingClientRect();
+    const gap = 8;
+    el.style.opacity = "0";
+    el.style.display = "block";
+    const tw = el.offsetWidth, th = el.offsetHeight;
+
+    // prefer above, fall back to below
+    let top = r.top - th - gap;
+    if (top < 6) top = r.bottom + gap;
+    // centre horizontally, clamp to viewport
+    let left = r.left + r.width / 2 - tw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+
+    el.style.top  = top  + "px";
+    el.style.left = left + "px";
+    el.classList.add("tip-show");
+  }
+
+  function hide() {
+    el.classList.remove("tip-show");
+  }
+
+  document.addEventListener("mouseover", e => {
+    const t = e.target.closest("[data-tip]");
+    clearTimeout(_timer);
+    if (t) _timer = setTimeout(() => show(t), 320);
+    else hide();
+  });
+  document.addEventListener("mouseout", e => {
+    if (!e.target.closest("[data-tip]")) { clearTimeout(_timer); hide(); }
+  });
+  document.addEventListener("click", () => { clearTimeout(_timer); hide(); });
+})();
 </script>
+
+<div id="ui-tooltip"></div>
 </body>
 </html>
