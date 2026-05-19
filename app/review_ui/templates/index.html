@@ -648,7 +648,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 <div class="layout">
   <aside>
     <div class="sidebar-head">
-      <h2>Jobs</h2>
+      <h2 data-tip="All documents processed in this session — click any job to open its review pane">Jobs</h2>
       <button class="btn btn-primary btn-block" id="new-btn" data-tip="Open the intake wizard — upload a local PDF or pull files from a remote SFTP gateway">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -1440,6 +1440,20 @@ function fmtTime(iso) {
 
 function badgeClass(status) { return `badge badge-${status}`; }
 
+const _statusTip = {
+  imported:   "Pulled from a remote source — click Process to start OCR extraction",
+  processing: "OCR extraction is being queued",
+  pending:    "Queued for OCR extraction",
+  extracting: "Running OCR — extracting text from the scanned PDF",
+  reviewing:  "Entity detection complete — open to review and approve detected PII",
+  approved:   "All entities approved — ready to prepare an export package",
+  exporting:  "Generating export artifacts",
+  done:       "Processing complete — export packages available",
+  failed:     "Processing failed — check the error in the detail pane",
+  normalizing:"Running OCR quality check",
+  normalized: "OCR corrections approved — ready for export",
+};
+
 function labelClass(lbl) {
   const map = {
     patient_name:     "lbl-patient_name",
@@ -1505,7 +1519,7 @@ function renderJobList() {
     <div class="job-card${currentJob?.id === j.id ? " active" : ""}" data-id="${j.id}">
       <div class="job-name">${escHtml(j.filename)}</div>
       <div class="job-meta">
-        <span class="${badgeClass(j.status)}">${j.status}</span>
+        <span class="${badgeClass(j.status)}" ${_statusTip[j.status] ? `data-tip="${_statusTip[j.status]}"` : ""}>${j.status}</span>
         <span class="job-time">${fmtTime(j.created_at)}</span>
       </div>
       ${j.status === "imported" && j.requires_ocr !== false ? `
@@ -1834,7 +1848,7 @@ function renderEntities(j) {
       </div>
       ${reviewing ? `
       <div class="entity-actions">
-        <button class="btn btn-success btn-sm" data-action="approve" data-id="${e.id}" data-tip="Confirm this entity should be pseudonymized — replaces it with a stable token in the export" data-tip-color="blue">✓ Approve</button>
+        <button class="btn btn-success btn-sm" data-action="approve" data-id="${e.id}" data-tip="Confirm this entity should be pseudonymized — replaces it with a stable token in the export">✓ Approve</button>
         <button class="btn btn-danger  btn-sm" data-action="dismiss" data-id="${e.id}" data-tip="Mark as not PII — this text will remain unchanged in the export">✗ Dismiss</button>
         <button class="btn btn-ghost   btn-sm" data-action="edit"    data-id="${e.id}" style="margin-left:auto" data-tip="Edit the replacement token for this entity">Edit</button>
         <button class="btn btn-ghost   btn-sm" data-action="delete"  data-id="${e.id}" style="color:var(--danger);padding:4px 7px" data-tip="Remove this detection entirely — the span can be re-annotated by selecting text">🗑</button>
