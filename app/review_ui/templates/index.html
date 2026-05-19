@@ -876,6 +876,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
         </div>
 
         <!-- ── Step 2: Choose LLM ─────────────────────────────── -->
+        <div id="wizard-steps-local">
         <div class="wizard-step">
           <div class="wizard-step-label">2 — OCR model</div>
           <div class="form-row" style="gap:8px;margin-bottom:8px">
@@ -920,6 +921,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             Select a source PDF above to continue
           </div>
         </div>
+        </div><!-- /#wizard-steps-local -->
 
       </div>
     </div>
@@ -4213,6 +4215,7 @@ document.getElementById("src-tab-demo")?.addEventListener("click", function() {
   this.classList.add("active");
   document.getElementById("demo-source-panel").style.display = "block";
   document.getElementById("server-source-panel").style.display = "none";
+  document.getElementById("wizard-steps-local").style.display = "none";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "none";
 });
@@ -4222,6 +4225,7 @@ document.getElementById("src-tab-local")?.addEventListener("click", function() {
   this.classList.add("active");
   document.getElementById("demo-source-panel").style.display = "none";
   document.getElementById("server-source-panel").style.display = "none";
+  document.getElementById("wizard-steps-local").style.display = "";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "";
 });
@@ -4231,6 +4235,7 @@ document.getElementById("src-tab-server")?.addEventListener("click", async funct
   this.classList.add("active");
   document.getElementById("demo-source-panel").style.display = "none";
   document.getElementById("server-source-panel").style.display = "block";
+  document.getElementById("wizard-steps-local").style.display = "none";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "none";
   await refreshGatewayStatus();

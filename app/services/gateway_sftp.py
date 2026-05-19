@@ -50,12 +50,14 @@ class SFTPGateway:
         self.config    = source_config
         self.source_id = source_config["id"]
 
-        base = source_config.get("gateway_base", "").rstrip("/")
-        if not base:
+        raw_base = source_config.get("gateway_base", "")
+        if not raw_base:
             raise ValueError(
                 f"Source '{self.source_id}' must have a 'gateway_base' field for SFTP gateway use"
             )
-        self.r_base       = base
+        # "/" is valid when sshd ChrootDirectory is used — strip only non-root paths
+        base = "" if raw_base == "/" else raw_base.rstrip("/")
+        self.r_base       = base or "/"
         self.r_incoming   = f"{base}/incoming"
         self.r_processing = f"{base}/processing"
         self.r_processed  = f"{base}/processed"
