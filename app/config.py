@@ -5,7 +5,15 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Try explicit paths first (Render Docker mounts secret files at the path
+# you configure, relative to the container root — not the WORKDIR).
+# Fall back to find_dotenv() for local dev.
+for _env_path in [Path("/app/.env"), Path(__file__).parent.parent / ".env"]:
+    if _env_path.exists():
+        load_dotenv(_env_path, override=False)
+        break
+else:
+    load_dotenv()
 
 ROOT = Path(__file__).parent.parent
 # DATA_DIR env var lets cloud deployments point to a persistent mounted disk

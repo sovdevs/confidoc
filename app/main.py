@@ -84,7 +84,9 @@ def _provision_demo_users() -> None:
     import os as _os
     spec = _os.getenv("CONFIDOC_DEMO_USERS", "").strip()
     if not spec:
+        logger.debug("CONFIDOC_DEMO_USERS not set — skipping user provisioning")
         return
+    logger.info("CONFIDOC_DEMO_USERS found — provisioning %d user(s)", spec.count(",") + 1)
     from app.auth.users import create_user, get_user
     for pair in spec.split(","):
         pair = pair.strip()
@@ -96,11 +98,12 @@ def _provision_demo_users() -> None:
         if not username or not password:
             continue
         if get_user(username):
-            continue  # never overwrite existing users
+            logger.info("Demo user '%s' already exists — skipping", username)
+            continue
         try:
             create_user(username, password)
             logger.info("Auto-provisioned demo user: %s", username)
-        except ValueError as exc:
+        except Exception as exc:
             logger.warning("Could not provision demo user %s: %s", username, exc)
 
 
