@@ -295,17 +295,19 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
 /* ── Tooltips ────────────────────────────────────────────── */
 #ui-tooltip {
-  position: fixed; z-index: 9999; max-width: 210px;
-  background: #12141f; border: 1.5px solid var(--border);
-  border-radius: 8px; padding: 7px 11px;
-  font-size: 12px; color: var(--text); line-height: 1.45;
-  pointer-events: none; opacity: 0; transition: opacity .15s;
-  box-shadow: 0 4px 18px rgba(0,0,0,.5);
+  display: none;
+  position: fixed; z-index: 99999;
+  max-width: 220px;
+  background: #12141f; border: 2px solid var(--border);
+  border-radius: 8px; padding: 8px 12px;
+  font-size: 12px; color: #e2e4f0; line-height: 1.5;
+  pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0,0,0,.7);
 }
-#ui-tooltip.tip-show  { opacity: 1; }
-#ui-tooltip.tip-red   { border-color: var(--danger); }
-#ui-tooltip.tip-purple{ border-color: #9b59b6; }
-#ui-tooltip.tip-blue  { border-color: var(--accent); }
+#ui-tooltip.tip-show   { display: block; }
+#ui-tooltip.tip-red    { border-color: #e05a5a; }
+#ui-tooltip.tip-purple { border-color: #9b59b6; }
+#ui-tooltip.tip-blue   { border-color: #5b7cf6; }
 
 /* ── Floating entity picker ──────────────────────────────── */
 #entity-picker { position: fixed; z-index: 200; background: var(--surface);
@@ -679,9 +681,9 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
           <!-- Source tabs -->
           <div style="display:flex;gap:6px;margin-bottom:14px">
-            <button class="view-tab active" id="src-tab-local">Local</button>
-            <button class="view-tab" id="src-tab-demo" style="display:none">Demo</button>
-            <button class="view-tab" id="src-tab-server">Server</button>
+            <button class="view-tab active" id="src-tab-local" data-tip="Upload a PDF from your disk or pick one from the server input folder">Local</button>
+            <button class="view-tab" id="src-tab-demo" style="display:none" data-tip="Load a pre-captured demo document — no API key required, uses pre-processed outputs">Demo</button>
+            <button class="view-tab" id="src-tab-server" data-tip="Pull files from a connected SFTP gateway or remote source server">Server</button>
           </div>
 
           <!-- Two-column source row: drop zone + folder picker -->
@@ -896,7 +898,8 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           <div class="form-row" style="gap:8px;margin-bottom:8px">
             <div class="form-group" style="flex:0 0 140px">
               <label>Provider</label>
-              <select id="ocr-provider" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;width:100%">
+              <select id="ocr-provider" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;width:100%"
+                data-tip="LLM provider for OCR extraction — leave blank to use the server default">
                 <option value="">server default</option>
                 <option value="openrouter">OpenRouter</option>
                 <option value="openai">OpenAI</option>
@@ -912,7 +915,8 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               <input list="model-suggestions" id="ocr-model"
                      autocomplete="off"
                      style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;width:100%;outline:none"
-                     placeholder="server default">
+                     placeholder="server default"
+                     data-tip="Vision model for OCR — type or pick from the list. Leave blank for the server default.">
               <datalist id="model-suggestions"></datalist>
             </div>
           </div>
@@ -920,7 +924,8 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             <label>API key <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
             <input type="text" id="ocr-api-key" placeholder="leave blank — uses server configured key"
                    autocomplete="off" spellcheck="false"
-                   style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;width:100%;outline:none;font-family:monospace">
+                   style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;width:100%;outline:none;font-family:monospace"
+                   data-tip="Override the API key for this document only — leave blank to use the key configured on the server">
           </div>
           <div id="ocr-model-current" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
         </div>
@@ -4349,25 +4354,23 @@ document.getElementById("demo-stop-btn")?.addEventListener("click", async () => 
 
   function show(t) {
     _cur = t;
+    // show first so offsetWidth/Height are real
     el.textContent = t.dataset.tip;
-    // set color class (no opacity manipulation — pure CSS transition)
     const c = t.dataset.tipColor;
-    el.className = c ? "tip-" + c : "";
+    el.className = "tip-show" + (c ? " tip-" + c : "");
 
-    // measure with content set, opacity still 0 via CSS
-    const tw = el.offsetWidth || 210;
-    const th = el.offsetHeight || 36;
     const r  = t.getBoundingClientRect();
-    const top  = r.top - th - 8 < 6 ? r.bottom + 8 : r.top - th - 8;
+    const tw = el.offsetWidth  || 200;
+    const th = el.offsetHeight || 36;
+    const top  = (r.top - th - 10 < 8) ? r.bottom + 10 : r.top - th - 10;
     const left = Math.max(8, Math.min(r.left + r.width / 2 - tw / 2, innerWidth - tw - 8));
     el.style.top  = top  + "px";
     el.style.left = left + "px";
-    el.classList.add("tip-show");
   }
 
   function hide() {
     clearTimeout(_timer);
-    el.classList.remove("tip-show");
+    el.className = "";
     _cur = null;
   }
 
@@ -4375,16 +4378,15 @@ document.getElementById("demo-stop-btn")?.addEventListener("click", async () => 
     const t = e.target.closest("[data-tip]");
     if (t === _cur) return;
     clearTimeout(_timer);
-    if (_cur) hide();
+    hide();
     if (t) _timer = setTimeout(() => show(t), 300);
   });
   document.addEventListener("mouseout", e => {
     const t = e.target.closest("[data-tip]");
-    if (t && !t.contains(e.relatedTarget)) { clearTimeout(_timer); hide(); }
+    if (t && !t.contains(e.relatedTarget)) hide();
   });
-  document.addEventListener("click",   hide);
-  document.addEventListener("scroll",  hide, true);
-  document.addEventListener("keydown", hide);
+  document.addEventListener("click",  hide);
+  document.addEventListener("scroll", hide, true);
 })();
 </script>
 </body>
