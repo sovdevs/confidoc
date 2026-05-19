@@ -15,6 +15,8 @@ data/mappings/.key
 data/auth/users.json
 # never commit encrypted per-user settings
 data/auth/user_settings/
+# real server config — keep placeholder version in sources.sample.json
+data/source_configs/sources.json
 
 # ── PDFs (never commit patient/confidential documents) ─────
 *.pdf
@@ -45,3 +47,7 @@ zshdumps/
 dist/
 *.egg-info/
 .DS_Store
+
+# ----
+DEV_SRVR.md
+DEV.md
