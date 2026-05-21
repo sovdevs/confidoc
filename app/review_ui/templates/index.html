@@ -1518,7 +1518,10 @@ async function loadJobs() {
     jobs = await api("/api/jobs");
     renderJobList();
   } catch(e) {
-    jobList.innerHTML = `<div class="empty" style="padding:40px 0;color:var(--danger)">Failed to load jobs</div>`;
+    if (e.message !== "Authentication required") {
+      jobList.innerHTML = `<div class="empty" style="padding:40px 0;color:var(--danger)">Failed to load jobs</div>`;
+    }
+    // 401 already handled by api() — don't overwrite the login overlay with an error banner
   }
 }
 
@@ -3503,6 +3506,8 @@ function expandLLMRun(runJson) {
 }
 
 // ── Auth ──────────────────────────────────────────────────
+let _preAuthJobId = null;   // remember open job so we can restore after re-login
+
 function showApp(username) {
   document.getElementById("login-overlay").classList.add("hidden");
   const hu = document.getElementById("header-user");
@@ -3512,6 +3517,11 @@ function showApp(username) {
 }
 
 function showLogin(msg) {
+  // Snapshot the current job so we can restore it after re-login
+  if (currentJob) _preAuthJobId = currentJob.id;
+  // Dismiss entity picker — its pickerSelection would be stale after re-login
+  hidePicker?.();
+  clearPoll?.();
   document.getElementById("login-overlay").classList.remove("hidden");
   const hu = document.getElementById("header-user");
   if (hu) hu.style.display = "none";
@@ -3715,7 +3725,10 @@ async function appInit() {
   await loadJobs();
   loadModelInfo();   // always init demo panel + config defaults
   if (jobs.length > 0) {
-    selectJob(jobs[0].id);
+    // Restore previously-open job after re-login, fall back to most recent
+    const restoreId = _preAuthJobId && jobs.find(j => j.id === _preAuthJobId)?.id;
+    _preAuthJobId = null;
+    selectJob(restoreId || jobs[0].id);
   } else {
     loadInputFiles();
   }
