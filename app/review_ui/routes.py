@@ -105,6 +105,19 @@ async def process_input(
 
 # ── Upload & ingest ──────────────────────────────────────────────────────────
 
+@router.post("/api/pdf-page-count")
+async def pdf_page_count(file: UploadFile = File(...)):
+    """Return page count for a PDF without creating a job — used for pre-run estimates."""
+    try:
+        import fitz
+        data = await file.read()
+        with fitz.open(stream=data, filetype="pdf") as doc:
+            pages = len(doc)
+        return {"pages": pages}
+    except Exception:
+        return {"pages": None}
+
+
 @router.post("/api/upload")
 async def upload(
     background_tasks: BackgroundTasks,

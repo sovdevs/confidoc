@@ -2164,7 +2164,29 @@ function _setSource(filename, file) {
   selectedFileRow.style.display = "block";
   dropZone.classList.toggle("has-file", !!file);
   runBtn.disabled = false;
-  if (runHint) runHint.style.display = "none";
+  if (runHint) {
+    runHint.textContent = "Counting pages…";
+    runHint.style.display = "block";
+  }
+  // Count pages and show estimate before user clicks Run
+  if (file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    fetch("/api/pdf-page-count", {method: "POST", body: fd})
+      .then(r => r.json())
+      .then(d => {
+        if (!runHint || runBtn.disabled) return;
+        if (d.pages) {
+          const est = fmtPageEst({page_count: d.pages});
+          runHint.textContent = `${d.pages} pages · ${est.split("·")[1]?.trim() || ""} estimated`;
+        } else {
+          runHint.style.display = "none";
+        }
+      })
+      .catch(() => { if (runHint) runHint.style.display = "none"; });
+  } else {
+    if (runHint) runHint.style.display = "none";
+  }
 }
 
 function _clearSource() {
