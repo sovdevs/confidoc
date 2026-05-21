@@ -1912,9 +1912,11 @@ async function handleEntityAction(evt) {
     await api(`/api/jobs/${jobId}/entities/${entityId}/approve`, {method:"POST"});
     await refreshCurrentJob();
   } else if (action === "dismiss") {
-    // Optimistic UI: red/muted immediately, then sync
     const card = btn.closest(".entity-card");
     if (card) { card.classList.remove("approved"); card.classList.add("dismissed"); }
+    // Remove the highlight immediately so the span is selectable right away
+    const mark = document.querySelector(`mark.highlight[data-eid="${entityId}"]`);
+    if (mark) mark.outerHTML = mark.textContent;
     _scrollToNextPending(entityId);
     await api(`/api/jobs/${jobId}/entities/${entityId}/dismiss`, {method:"POST"});
     await refreshCurrentJob();
@@ -1981,7 +1983,7 @@ function renderTextPreview(j) {
     .then(text => {
       if (!text || text.startsWith("{")) { el.textContent = "(Preview not available)"; rawText = ""; return; }
       rawText = text;
-      el.innerHTML = buildHighlightedHtml(text, j.entities || []);
+      el.innerHTML = buildHighlightedHtml(text, (j.entities || []).filter(e => !e.dismissed));
     })
     .catch(() => { el.textContent = "(Could not load preview)"; rawText = ""; });
 }
