@@ -1271,7 +1271,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             <!-- Prompt mode -->
             <div class="form-group">
               <label>Prompt mode</label>
-              <select id="llm-prompt-mode">
+              <select id="llm-prompt-mode" data-tip="Saved: use a pre-written prompt from data/llm_export_prompts/. Ad hoc: type a prompt now. Combined: saved prompt plus an extra instruction.">
                 <option value="saved">Saved prompt</option>
                 <option value="adhoc">Ad hoc prompt</option>
                 <option value="combined">Saved prompt + additional instruction</option>
@@ -1279,7 +1279,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             </div>
             <div class="form-group" id="llm-saved-prompt-row">
               <label>Saved prompt</label>
-              <select id="llm-prompt-select"><option value="">Loading…</option></select>
+              <select id="llm-prompt-select" data-tip="Pre-written prompts from data/llm_export_prompts/ — add .md files there to extend this list"><option value="">Loading…</option></select>
             </div>
             <div class="form-group" id="llm-adhoc-row" style="display:none">
               <label>Prompt / additional instruction</label>
@@ -1293,7 +1293,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             <!-- Provider / model -->
             <div class="form-group">
               <label>Provider</label>
-              <select id="llm-provider">
+              <select id="llm-provider" data-tip="LLM provider for the export run — defaults to your saved export model setting">
                 <option value="openrouter">OpenRouter</option>
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic</option>
@@ -1305,6 +1305,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
               <label>Model</label>
               <input id="llm-model" list="llm-model-list" autocomplete="off"
                      placeholder="Server default or custom model ID"
+                     data-tip="Model for the LLM export run — pre-filled from your saved export model setting, or type any model ID"
                      style="background:var(--bg);color:var(--text);border:1px solid var(--border);
                             border-radius:7px;padding:7px 8px;font-size:12px;outline:none;width:100%">
               <datalist id="llm-model-list"></datalist>
@@ -2261,14 +2262,18 @@ newBtn.addEventListener("click", () => { showUploadPane(); loadInputFiles(); loa
 importBtn.addEventListener("click", showImportPane);
 
 // ── Model info + OCR settings ─────────────────────────────
-let _defaultPdfProvider = "openrouter";
-let _defaultPdfModel    = "google/gemini-2.0-flash";
+let _defaultPdfProvider  = "openrouter";
+let _defaultPdfModel     = "google/gemini-2.0-flash";
+let _defaultAnonProvider = "openrouter";
+let _defaultAnonModel    = "google/gemini-2.0-flash";
 
 async function loadModelInfo() {
   try {
     const cfg = await api("/api/config");
-    _defaultPdfProvider = cfg.pdf_provider;
-    _defaultPdfModel    = cfg.pdf_model;
+    _defaultPdfProvider  = cfg.pdf_provider;
+    _defaultPdfModel     = cfg.pdf_model;
+    _defaultAnonProvider = cfg.anon_provider || cfg.pdf_provider;
+    _defaultAnonModel    = cfg.anon_model    || cfg.pdf_model;
     const el = document.getElementById("ocr-model-current");
     if (cfg.byok_only) {
       if (el) el.innerHTML = `<span style="color:var(--warning);font-weight:600">⚠ BYOK mode — you must enter your own API key to process documents</span>`;
@@ -3381,6 +3386,24 @@ async function initLLMExportPane(j) {
       : `<option value="">No packages yet — run policy engine first</option>`;
   } catch(_) { pkgSel.innerHTML = `<option value="">Failed to load packages</option>`; }
 
+  // Apply server/user defaults to provider + model if not already set by user
+  const provSel  = document.getElementById("llm-provider");
+  const modelInp = document.getElementById("llm-model");
+  if (provSel && !provSel.dataset.userSet) {
+    // Prefer user's saved export settings, fall back to server anon defaults
+    let prov = _defaultAnonProvider, model = _defaultAnonModel;
+    try {
+      const us = await api("/api/user/settings");
+      if (us.export_provider) prov  = us.export_provider;
+      if (us.export_model)    model = us.export_model;
+    } catch(_) {}
+    // Set provider select (find matching option, or leave as-is)
+    [...provSel.options].forEach(o => { if (o.value === prov) o.selected = true; });
+    if (modelInp && !modelInp.value) modelInp.value = model;
+    // Populate model datalist for the selected provider
+    loadLLMModelList();
+  }
+
   // Reset output area
   document.getElementById("llm-empty").style.display = "flex";
   document.getElementById("llm-loading").style.display = "none";
@@ -3420,7 +3443,10 @@ async function loadLLMModelList() {
     });
   } catch(_) {}
 }
-document.getElementById("llm-provider").addEventListener("change", loadLLMModelList);
+document.getElementById("llm-provider").addEventListener("change", function() {
+  this.dataset.userSet = "1";   // don't override with defaults on re-open
+  loadLLMModelList();
+});
 document.getElementById("llm-api-key").addEventListener("change", loadLLMModelList);
 
 // Run button
