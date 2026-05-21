@@ -1293,7 +1293,8 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             <!-- Provider / model -->
             <div class="form-group">
               <label>Provider</label>
-              <select id="llm-provider" data-tip="LLM provider for the export run — defaults to your saved export model setting">
+              <select id="llm-provider" data-tip="LLM provider for the export run — server default uses the anon model configured in the server .env">
+                <option value="">server default</option>
                 <option value="openrouter">OpenRouter</option>
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic</option>
@@ -3390,18 +3391,16 @@ async function initLLMExportPane(j) {
   const provSel  = document.getElementById("llm-provider");
   const modelInp = document.getElementById("llm-model");
   if (provSel && !provSel.dataset.userSet) {
-    // Prefer user's saved export settings, fall back to server anon defaults
-    let prov = _defaultAnonProvider, model = _defaultAnonModel;
+    // Use user's saved export settings if set; otherwise leave on "server default"
     try {
       const us = await api("/api/user/settings");
-      if (us.export_provider) prov  = us.export_provider;
-      if (us.export_model)    model = us.export_model;
+      if (us.export_provider) {
+        [...provSel.options].forEach(o => { o.selected = o.value === us.export_provider; });
+        if (modelInp && !modelInp.value && us.export_model) modelInp.value = us.export_model;
+        loadLLMModelList();
+      }
+      // else: leave on "server default" (value="") — model stays blank
     } catch(_) {}
-    // Set provider select (find matching option, or leave as-is)
-    [...provSel.options].forEach(o => { if (o.value === prov) o.selected = true; });
-    if (modelInp && !modelInp.value) modelInp.value = model;
-    // Populate model datalist for the selected provider
-    loadLLMModelList();
   }
 
   // Reset output area
@@ -3444,7 +3443,12 @@ async function loadLLMModelList() {
   } catch(_) {}
 }
 document.getElementById("llm-provider").addEventListener("change", function() {
-  this.dataset.userSet = "1";   // don't override with defaults on re-open
+  this.dataset.userSet = "1";
+  if (!this.value) {
+    // "server default" — clear model so placeholder shows
+    const m = document.getElementById("llm-model");
+    if (m) m.value = "";
+  }
   loadLLMModelList();
 });
 document.getElementById("llm-api-key").addEventListener("change", loadLLMModelList);
