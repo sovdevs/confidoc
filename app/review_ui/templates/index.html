@@ -1345,7 +1345,13 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
                 <div style="font-size:13px;color:var(--muted)">Running LLM…</div>
               </div>
               <div id="llm-result" style="display:none">
-                <div style="font-size:11px;color:var(--muted);margin-bottom:8px" id="llm-result-meta"></div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                  <div style="font-size:11px;color:var(--muted);flex:1" id="llm-result-meta"></div>
+                  <button class="btn btn-ghost btn-sm" id="llm-dl-md"
+                    data-tip="Download result as Markdown file">↓ MD</button>
+                  <button class="btn btn-ghost btn-sm" id="llm-dl-docx"
+                    data-tip="Download result as Word document (.docx)">↓ Word</button>
+                </div>
                 <div id="llm-result-text"
                   style="font-size:13px;line-height:1.8;white-space:pre-wrap;background:var(--surface);
                          border:1px solid var(--border);border-radius:8px;padding:16px 18px"></div>
@@ -3510,13 +3516,22 @@ document.getElementById("llm-run-btn").addEventListener("click", async () => {
   }
 });
 
+let _currentLLMRun = null;
+
 function renderLLMRun(run) {
+  _currentLLMRun = run;
   document.getElementById("llm-loading").style.display = "none";
   const resultEl = document.getElementById("llm-result");
   const metaEl   = document.getElementById("llm-result-meta");
   const textEl   = document.getElementById("llm-result-text");
+  const dlMd     = document.getElementById("llm-dl-md");
+  const dlDocx   = document.getElementById("llm-dl-docx");
 
-  if (run.status === "failed") {
+  const ok = run.status !== "failed";
+  if (dlMd)   dlMd.style.display   = ok ? "" : "none";
+  if (dlDocx) dlDocx.style.display = ok ? "" : "none";
+
+  if (!ok) {
     metaEl.textContent = `Failed · ${run.model}`;
     textEl.style.color = "var(--danger)";
     textEl.textContent = run.error || "Unknown error";
@@ -3527,6 +3542,38 @@ function renderLLMRun(run) {
   }
   resultEl.style.display = "block";
 }
+
+// ── LLM result downloads ───────────────────────────────────
+document.getElementById("llm-dl-md")?.addEventListener("click", () => {
+  if (!_currentLLMRun?.llm_output) return;
+  const name = (_currentLLMRun.prompt_name || "llm_result")
+    .toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") + ".md";
+  const blob = new Blob([_currentLLMRun.llm_output], {type: "text/markdown"});
+  const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(blob), download: name});
+  a.click(); URL.revokeObjectURL(a.href);
+});
+
+document.getElementById("llm-dl-docx")?.addEventListener("click", async () => {
+  if (!currentJob || !_currentLLMRun?.run_id) return;
+  const btn = document.getElementById("llm-dl-docx");
+  btn.disabled = true; btn.textContent = "…";
+  try {
+    const r = await fetch(
+      `/api/llm-export/${currentJob.id}/runs/${_currentLLMRun.run_id}/docx`,
+      {method: "POST"}
+    );
+    if (!r.ok) throw new Error(await r.text());
+    const blob = await r.blob();
+    const name = (_currentLLMRun.prompt_name || "llm_result")
+      .toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") + ".docx";
+    const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(blob), download: name});
+    a.click(); URL.revokeObjectURL(a.href);
+  } catch(e) {
+    showToast(e.message || "Word export failed", "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "↓ Word";
+  }
+});
 
 async function loadLLMHistory(jobId) {
   try {

@@ -1457,6 +1457,7 @@ async def run_llm_export(job_id: str, body: LLMExportRunBody):
         "policy_package_id":  body.policy_package_id,
         "prompt_mode":        body.prompt_mode,
         "prompt_id":          body.prompt_id,
+        "prompt_name":        prompt_name,
         "effective_prompt":   effective_prompt,
         "source_markdown":    source_markdown,
         "provider":           provider,
@@ -1521,6 +1522,7 @@ def list_llm_runs(job_id: str):
                 "run_id":            data.get("run_id"),
                 "status":            data.get("status"),
                 "prompt_id":         data.get("prompt_id"),
+                "prompt_name":       data.get("prompt_name"),
                 "source_mode":       data.get("source_mode"),
                 "policy_package_id": data.get("policy_package_id"),
                 "provider":          data.get("provider"),
@@ -1532,6 +1534,58 @@ def list_llm_runs(job_id: str):
         except Exception:
             continue
     return {"runs": runs}
+
+
+@router.post("/api/llm-export/{job_id}/runs/{run_id}/docx")
+def llm_export_to_docx(job_id: str, run_id: str):
+    """Convert a completed LLM run's output to a Word document."""
+    import io
+    from docx import Document
+    from docx.shared import Pt
+    from fastapi.responses import StreamingResponse
+
+    run_path = settings.llm_runs_dir / job_id / f"{run_id}.json"
+    if not run_path.exists():
+        raise HTTPException(404, "LLM run not found")
+
+    data = json.loads(run_path.read_text(encoding="utf-8"))
+    text = data.get("llm_output") or ""
+    if not text:
+        raise HTTPException(400, "Run has no output to export")
+
+    prompt_name = data.get("prompt_name") or "LLM Export"
+    model       = data.get("model", "")
+    created_at  = data.get("created_at", "")[:10]
+
+    doc = Document()
+    doc.add_heading(prompt_name, level=1)
+    doc.add_paragraph(f"{model}  ·  {created_at}", style="Subtitle" if "Subtitle" in
+                      [s.name for s in doc.styles] else "Normal").runs[0].font.size = Pt(9)
+    doc.add_paragraph("")
+
+    # Render markdown headings and paragraphs simply
+    for line in text.splitlines():
+        if line.startswith("### "):
+            doc.add_heading(line[4:], level=3)
+        elif line.startswith("## "):
+            doc.add_heading(line[3:], level=2)
+        elif line.startswith("# "):
+            doc.add_heading(line[2:], level=1)
+        elif line.strip() == "":
+            doc.add_paragraph("")
+        else:
+            doc.add_paragraph(line)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    safe_name = prompt_name.lower().replace(" ", "_")[:40] + ".docx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
