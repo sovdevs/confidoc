@@ -149,8 +149,9 @@ def config():
         "anon_provider": settings.anon_provider,
         "anon_model":    settings.anon_model,
         "byok_only":          settings.byok_only,
-        "demo_capture":       settings.demo_capture,
-        "demo_key_available": bool(settings.demo_api_key),
+        "demo_capture":        settings.demo_capture,
+        "demo_capture_panel":  settings.demo_capture_panel,
+        "demo_key_available":  bool(settings.demo_api_key),
     }
 
 

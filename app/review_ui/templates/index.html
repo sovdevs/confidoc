@@ -3690,6 +3690,9 @@ async function loadLLMHistory(jobId) {
     const listEl = document.getElementById("llm-history-list");
     if (!runs.length) { histEl.style.display = "none"; return; }
     histEl.style.display = "block";
+    // Auto-load the most recent completed run so buttons are immediately visible
+    const latest = runs.find(r => r.status === "completed") || runs[0];
+    if (latest) renderLLMRun(latest);
     listEl.innerHTML = runs.map(r => `
       <div style="border:1px solid var(--border);border-radius:7px;padding:8px 10px;margin-bottom:6px;cursor:pointer"
            onclick="expandLLMRun(${JSON.stringify(JSON.stringify(r))})">
@@ -4443,8 +4446,10 @@ async function initDemoCapture(cfg) {
   if (!cfg.demo_capture) return;
   _demoCapture = true;
   _demoKeyAvailable = !!cfg.demo_key_available;
+  // Capture panel (Start/Stop buttons) only shown when explicitly enabled —
+  // hide on deployed instances so demo users don't see developer tooling
   const panel = document.getElementById("demo-panel");
-  if (panel) panel.style.display = "block";
+  if (panel) panel.style.display = cfg.demo_capture_panel ? "block" : "none";
   const demoTab = document.getElementById("src-tab-demo");
   if (demoTab) demoTab.style.display = "";
   await loadDemoFiles();
