@@ -1440,6 +1440,20 @@ function fmtTime(iso) {
 
 function badgeClass(status) { return `badge badge-${status}`; }
 
+function fmtPageEst(j) {
+  const n = j.page_count;
+  if (!n) return "";
+  // Estimate: ceil(pages / MAX_CONCURRENT_PAGES) × ~10s per batch
+  const concurrent = 10;
+  const batches    = Math.ceil(n / concurrent);
+  const secs       = batches * 10;
+  const est = secs < 30  ? "~15s"
+            : secs < 75  ? "~1 min"
+            : secs < 150 ? `~${Math.round(secs / 60)} min`
+            :               `~${Math.round(secs / 60)} min`;
+  return `${n}p · ${est}`;
+}
+
 const _statusTip = {
   imported:   "Pulled from a remote source — click Process to start OCR extraction",
   processing: "OCR extraction is being queued",
@@ -1521,6 +1535,7 @@ function renderJobList() {
       <div class="job-meta">
         <span class="${badgeClass(j.status)}" ${_statusTip[j.status] ? `data-tip="${_statusTip[j.status]}"` : ""}>${j.status}</span>
         <span class="job-time">${fmtTime(j.created_at)}</span>
+        ${fmtPageEst(j) ? `<span style="font-size:10px;color:var(--muted);margin-left:auto" data-tip="Estimated OCR time based on page count and concurrency">${fmtPageEst(j)}</span>` : ""}
       </div>
       ${j.status === "imported" && j.requires_ocr !== false ? `
         <button class="btn btn-primary btn-sm" data-process="${j.id}"
@@ -1666,8 +1681,10 @@ function renderDetail() {
   badge.className = badgeClass(j.status);
   badge.textContent = j.status;
 
+  const _pageInfo = j.page_count ? `  ·  ${j.page_count} pages` +
+    (["extracting","pending","processing"].includes(j.status) ? `  ·  est. ${fmtPageEst(j).split("·")[1]?.trim() || ""}` : "") : "";
   document.getElementById("detail-meta").textContent =
-    `${j.src_lang} → ${j.tgt_lang}  ·  Created ${fmtTime(j.created_at)}` +
+    `${j.src_lang} → ${j.tgt_lang}  ·  Created ${fmtTime(j.created_at)}${_pageInfo}` +
     (j.error ? `  ·  Error: ${j.error}` : "");
 
   updateZone1(j);

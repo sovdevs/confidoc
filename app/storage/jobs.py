@@ -64,6 +64,7 @@ class Job(BaseModel):
     # OCR extraction model used for this job (may differ from config defaults)
     pdf_provider: Optional[str] = None
     pdf_model: Optional[str] = None
+    page_count: Optional[int] = None     # set as soon as pages are counted
 
     src_lang: str = "de-DE"
     tgt_lang: str = "en-GB"

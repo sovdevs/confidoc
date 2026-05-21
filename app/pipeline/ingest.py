@@ -90,6 +90,10 @@ async def _extract_pages(
     with fitz.open(str(pdf_path)) as doc:
         total = len(doc)
         audit_log.log(job.id, "extraction_pages_detected", {"pages": total})
+        # Persist page count immediately so the UI can show an estimate
+        from app.storage import jobs as job_store
+        job.page_count = total
+        job_store.save(job)
 
         # Render all pages first so we can save previews regardless of LLM outcome
         rendered: list[bytes] = []
