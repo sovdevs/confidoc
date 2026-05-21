@@ -33,6 +33,7 @@ _LABEL_DESCRIPTIONS: dict[str, str] = {
     "DATE":           "dates in any format (DD.MM.YYYY, YYYY-MM-DD, written out, …)",
     "ADDRESS":        "street addresses including street name and building number",
     "LOCATION":       "postal/zip codes combined with city names",
+    "ORGANIZATION":   "named clinics, hospitals, labs, insurers, companies — e.g. 'MediCore International Health Services', 'Universitätsklinikum Frankfurt'",
     "CASE_ID":        "case reference or patient record numbers",
     "ID_NUMBER":      "insurance policy or national ID numbers",
     "PHONE":          "telephone or fax numbers",
@@ -49,7 +50,7 @@ plain form that should have been redacted.
 
 Return your findings as a JSON array.  Each element must have exactly two keys:
   "label" — one of: PATIENT_NAME, PHYSICIAN_NAME, DATE, ADDRESS, LOCATION,
-                     CASE_ID, ID_NUMBER, PHONE
+                     ORGANIZATION, CASE_ID, ID_NUMBER, PHONE
   "text"  — the EXACT verbatim substring as it still appears in the partially-redacted
              document.  Copy character-for-character, including OCR artefacts.
 
@@ -58,6 +59,13 @@ Rules:
 - Do NOT report tokens that are already redacted (do not return "[DATE]" or "[ADDRESS]").
 - List EVERY occurrence individually.
 - Do NOT include generic clinical terms ("Patientin" alone is not a name).
+- ORGANIZATION: flag any named institution, clinic, hospital, laboratory, insurer or \
+company. Examples: "MediCore International Health Services", "Universitätsklinikum Frankfurt", \
+"AOK Bayern", "Labor Dr. Müller". The word "institution:" or "Einrichtung:" before a name \
+is a strong signal.
+- ADDRESS vs LOCATION: flag the street+number as ADDRESS and the postcode+city as LOCATION \
+separately when they appear together. "Reuterweg 14" is ADDRESS; "60486 Frankfurt am Main" \
+is LOCATION.
 - If nothing was missed, return [].
 """
 
