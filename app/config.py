@@ -109,7 +109,7 @@ class Settings:
     # ── Auth ──────────────────────────────────────────────────────────────────
     auth_enabled: bool = os.getenv("CONFIDOC_AUTH_ENABLED", "true").lower() == "true"
     strict_auth_mode: bool = os.getenv("STRICT_AUTH_MODE", "false").lower() == "true"
-    session_ttl_hours: int = int(os.getenv("SESSION_TTL_HOURS", "8"))
+    session_ttl_hours: int = int(os.getenv("SESSION_TTL_HOURS", "72"))
 
     auth_dir: Path = DATA / "auth"
     users_file: Path = DATA / "auth" / "users.json"

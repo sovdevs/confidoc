@@ -11,8 +11,9 @@ __pycache__/
 .env.*
 *.key
 data/mappings/.key
-# never commit user store — create with: uv run confidoc-auth create-user <username>
+# never commit user store or sessions
 data/auth/users.json
+data/auth/sessions.json
 # never commit encrypted per-user settings
 data/auth/user_settings/
 # real server config — keep placeholder version in sources.sample.json
