@@ -1536,6 +1536,52 @@ def list_llm_runs(job_id: str):
     return {"runs": runs}
 
 
+@router.post("/api/llm-export/{job_id}/runs/{run_id}/rehydrate")
+async def llm_export_rehydrate(job_id: str, run_id: str, request: Request):
+    """Zone 1: rehydrate tokens in an LLM run output.
+
+    Requires the caller to re-confirm their password — this is a deliberate
+    friction gate for accessing real PHI from within the LLM result.
+    """
+    from app.auth.sessions import COOKIE_NAME, get_username
+    from app.auth.users import verify_password
+
+    body = await request.json()
+    password = body.get("password", "")
+
+    # Re-verify password — extra gate for Zone 1 PHI exposure
+    token    = request.cookies.get(COOKIE_NAME)
+    username = get_username(token) if token else None
+    if not username or not verify_password(username, password):
+        raise HTTPException(401, "Password incorrect — rehydration requires re-confirmation")
+
+    run_path = settings.llm_runs_dir / job_id / f"{run_id}.json"
+    if not run_path.exists():
+        raise HTTPException(404, "LLM run not found")
+
+    data = json.loads(run_path.read_text(encoding="utf-8"))
+    text = data.get("llm_output") or ""
+    if not text:
+        raise HTTPException(400, "Run has no output")
+
+    from app.storage.mappings import load as load_mapping, rehydrate
+    mapping = load_mapping(job_id)
+    if not mapping:
+        raise HTTPException(404, "No token mapping found for this job — was Approve All run?")
+
+    rehydrated = rehydrate(text, mapping)
+    audit_log.log(job_id, "LLM_EXPORT_REHYDRATED", {
+        "run_id": run_id, "username": username,
+        "tokens_replaced": sum(1 for t in mapping if t in text),
+    })
+    return {
+        "ok": True,
+        "rehydrated_text": rehydrated,
+        "prompt_name": data.get("prompt_name"),
+        "model": data.get("model"),
+    }
+
+
 @router.post("/api/llm-export/{job_id}/runs/{run_id}/docx")
 def llm_export_to_docx(job_id: str, run_id: str):
     """Convert a completed LLM run's output to a Word document."""

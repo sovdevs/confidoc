@@ -645,6 +645,30 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
   </div>
 </div>
 
+<!-- ── Rehydrate confirmation modal ───────────────────────────── -->
+<div id="rehydrate-modal" class="hidden" style="position:fixed;inset:0;z-index:850;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center">
+  <div style="width:340px;background:var(--zone1-bg);border:1.5px solid var(--zone1-border);border-radius:14px;padding:28px 24px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="z1-dot"></div>
+      <span style="font-weight:700;font-size:15px;color:#e07070">Zone 1 — Rehydration</span>
+    </div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.5">This will restore real patient names and dates into the LLM result. The output will contain PHI. Re-enter your password to confirm.</p>
+    <div class="form-group">
+      <label style="font-size:12px;color:var(--muted)">Password</label>
+      <input id="rehydrate-password" type="password" autocomplete="current-password"
+        style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--zone1-border);border-radius:7px;padding:9px 12px;font-size:13px;outline:none">
+    </div>
+    <div id="rehydrate-error" style="font-size:12px;color:var(--danger);display:none"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" id="rehydrate-cancel">Cancel</button>
+      <button class="btn btn-sm" id="rehydrate-confirm-md"
+        style="background:#401818;color:#e07070;border:1px solid var(--zone1-border);flex:1">↓ Rehydrated MD</button>
+      <button class="btn btn-sm" id="rehydrate-confirm-docx"
+        style="background:#401818;color:#e07070;border:1px solid var(--zone1-border);flex:1">↓ Rehydrated Word</button>
+    </div>
+  </div>
+</div>
+
 <div class="layout">
   <aside>
     <div class="sidebar-head">
@@ -1348,9 +1372,14 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
                   <div style="font-size:11px;color:var(--muted);flex:1" id="llm-result-meta"></div>
                   <button class="btn btn-ghost btn-sm" id="llm-dl-md"
-                    data-tip="Download result as Markdown file">↓ MD</button>
+                    data-tip="Download pseudonymized result as Markdown">↓ MD</button>
                   <button class="btn btn-ghost btn-sm" id="llm-dl-docx"
-                    data-tip="Download result as Word document (.docx)">↓ Word</button>
+                    data-tip="Download pseudonymized result as Word document">↓ Word</button>
+                  <button class="btn btn-ghost btn-sm" id="llm-btn-rehydrate"
+                    style="border-color:var(--zone1-border);color:#e07070"
+                    data-tip="Zone 1: restore real patient names and dates into this result before downloading — requires password confirmation" data-tip-color="red">
+                    ↺ Rehydrate &amp; Download
+                  </button>
                 </div>
                 <div id="llm-result-text"
                   style="font-size:13px;line-height:1.8;white-space:pre-wrap;background:var(--surface);
@@ -3541,6 +3570,84 @@ function renderLLMRun(run) {
     textEl.textContent = run.llm_output || "";
   }
   resultEl.style.display = "block";
+}
+
+// ── LLM rehydrate modal ───────────────────────────────────────
+let _rehydrateFormat = "md";
+
+function _openRehydrateModal(fmt) {
+  _rehydrateFormat = fmt;
+  document.getElementById("rehydrate-password").value = "";
+  document.getElementById("rehydrate-error").style.display = "none";
+  document.getElementById("rehydrate-modal").classList.remove("hidden");
+  document.getElementById("rehydrate-modal").style.display = "flex";
+  setTimeout(() => document.getElementById("rehydrate-password").focus(), 50);
+}
+function _closeRehydrateModal() {
+  document.getElementById("rehydrate-modal").classList.add("hidden");
+  document.getElementById("rehydrate-modal").style.display = "none";
+}
+
+document.getElementById("llm-btn-rehydrate")?.addEventListener("click", () => _openRehydrateModal("md"));
+document.getElementById("rehydrate-cancel")?.addEventListener("click", _closeRehydrateModal);
+document.getElementById("rehydrate-confirm-md")?.addEventListener("click", () => _doRehydrate("md"));
+document.getElementById("rehydrate-confirm-docx")?.addEventListener("click", () => _doRehydrate("docx"));
+document.getElementById("rehydrate-password")?.addEventListener("keydown", e => {
+  if (e.key === "Enter") _doRehydrate(_rehydrateFormat);
+});
+
+async function _doRehydrate(fmt) {
+  if (!currentJob || !_currentLLMRun?.run_id) return;
+  const pw  = document.getElementById("rehydrate-password").value;
+  const err = document.getElementById("rehydrate-error");
+  if (!pw) { err.textContent = "Password required."; err.style.display = ""; return; }
+
+  const mdBtn   = document.getElementById("rehydrate-confirm-md");
+  const docxBtn = document.getElementById("rehydrate-confirm-docx");
+  mdBtn.disabled = docxBtn.disabled = true;
+  err.style.display = "none";
+
+  try {
+    const res = await fetch(
+      `/api/llm-export/${currentJob.id}/runs/${_currentLLMRun.run_id}/rehydrate`,
+      { method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({password: pw}) }
+    );
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.detail || "Rehydration failed");
+    }
+    const data = await res.json();
+    const text = data.rehydrated_text;
+    const baseName = (data.prompt_name || "rehydrated")
+      .toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+
+    _closeRehydrateModal();
+
+    if (fmt === "md") {
+      const blob = new Blob([text], {type: "text/markdown"});
+      const a = Object.assign(document.createElement("a"),
+        {href: URL.createObjectURL(blob), download: baseName + "_rehydrated.md"});
+      a.click(); URL.revokeObjectURL(a.href);
+    } else {
+      // Docx via server — send rehydrated text
+      const r2 = await fetch(
+        `/api/llm-export/${currentJob.id}/runs/${_currentLLMRun.run_id}/docx`,
+        {method: "POST"}
+      );
+      if (!r2.ok) throw new Error(await r2.text());
+      const blob = await r2.blob();
+      const a = Object.assign(document.createElement("a"),
+        {href: URL.createObjectURL(blob), download: baseName + "_rehydrated.docx"});
+      a.click(); URL.revokeObjectURL(a.href);
+    }
+    showToast("Rehydrated download started — Zone 1 document", "success");
+  } catch(e) {
+    err.textContent = e.message || "Failed";
+    err.style.display = "";
+  } finally {
+    mdBtn.disabled = docxBtn.disabled = false;
+  }
 }
 
 // ── LLM result downloads ───────────────────────────────────
