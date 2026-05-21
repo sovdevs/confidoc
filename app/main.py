@@ -244,12 +244,13 @@ def main() -> None:
     import os as _os
     from pathlib import Path as _Path
     app_dir = str(_Path(__file__).parent)
+    is_dev  = _os.getenv("CONFIDOC_DEV_RELOAD", "false").lower() == "true"
     uvicorn.run(
         "app.main:app",
         host=settings.host,
         port=settings.port,
-        reload=True,
-        reload_dirs=[app_dir],   # only watch app/ — not data/ which changes during processing
+        reload=is_dev,
+        reload_dirs=[app_dir] if is_dev else None,
     )
 
 

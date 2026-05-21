@@ -2,7 +2,7 @@ services:
   - type: web
     name: confidoc
     runtime: docker
-    plan: starter          # $7/month — 512MB RAM, enough without docling
+    plan: standard         # $25/month — 2GB RAM, needed for PDF rendering + LLM calls
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     envVars:
@@ -25,9 +25,9 @@ services:
       - key: CONFIDOC_ANON_MODEL
         value: gemini-2.0-flash
       - key: MAX_CONCURRENT_PDFS
-        value: "2"
+        value: "1"
       - key: MAX_CONCURRENT_PAGES
-        value: "4"
+        value: "2"
       - key: CONFIDOC_BYOK_ONLY
         value: "true"          # users must supply their own API key — server key not used
       - key: CONFIDOC_DEMO_CAPTURE
