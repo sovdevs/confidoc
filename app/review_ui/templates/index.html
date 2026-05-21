@@ -3624,24 +3624,37 @@ async function _doRehydrate(fmt) {
 
     _closeRehydrateModal();
 
+    // Update the result panel to show rehydrated text
+    const textEl = document.getElementById("llm-result-text");
+    if (textEl) {
+      textEl.textContent = text;
+      textEl.style.borderColor = "var(--zone1-border)";
+    }
+    const metaEl = document.getElementById("llm-result-meta");
+    if (metaEl) metaEl.textContent = metaEl.textContent + "  ·  ⚠ Zone 1 — rehydrated";
+
     if (fmt === "md") {
       const blob = new Blob([text], {type: "text/markdown"});
       const a = Object.assign(document.createElement("a"),
         {href: URL.createObjectURL(blob), download: baseName + "_rehydrated.md"});
       a.click(); URL.revokeObjectURL(a.href);
     } else {
-      // Docx via server — send rehydrated text
-      const r2 = await fetch(
-        `/api/llm-export/${currentJob.id}/runs/${_currentLLMRun.run_id}/docx`,
-        {method: "POST"}
-      );
+      // Post the rehydrated text directly to convert to docx
+      const r2 = await fetch("/api/llm-export/docx-from-text", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          text, title: data.prompt_name || "Rehydrated Summary",
+          model: data.model || "", filename: baseName + "_rehydrated.docx"
+        }),
+      });
       if (!r2.ok) throw new Error(await r2.text());
       const blob = await r2.blob();
       const a = Object.assign(document.createElement("a"),
         {href: URL.createObjectURL(blob), download: baseName + "_rehydrated.docx"});
       a.click(); URL.revokeObjectURL(a.href);
     }
-    showToast("Rehydrated download started — Zone 1 document", "success");
+    showToast("Rehydrated download ready — Zone 1 document", "success");
   } catch(e) {
     err.textContent = e.message || "Failed";
     err.style.display = "";

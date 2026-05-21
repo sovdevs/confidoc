@@ -1582,6 +1582,45 @@ async def llm_export_rehydrate(job_id: str, run_id: str, request: Request):
     }
 
 
+@router.post("/api/llm-export/docx-from-text")
+async def docx_from_text(request: Request):
+    """Convert arbitrary text to a Word document — used for rehydrated exports."""
+    import io
+    from docx import Document
+    from docx.shared import Pt
+    from fastapi.responses import StreamingResponse
+
+    body     = await request.json()
+    text     = body.get("text", "")
+    title    = body.get("title", "Export")
+    model    = body.get("model", "")
+    filename = body.get("filename", "export.docx")
+
+    doc = Document()
+    doc.add_heading(title, level=1)
+    if model:
+        p = doc.add_paragraph(model)
+        p.runs[0].font.size = Pt(9)
+        p.runs[0].font.color.rgb = None
+    doc.add_paragraph("")
+
+    for line in text.splitlines():
+        if line.startswith("### "):   doc.add_heading(line[4:], level=3)
+        elif line.startswith("## "): doc.add_heading(line[3:], level=2)
+        elif line.startswith("# "):  doc.add_heading(line[2:], level=1)
+        elif line.strip() == "":     doc.add_paragraph("")
+        else:                        doc.add_paragraph(line)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.post("/api/llm-export/{job_id}/runs/{run_id}/docx")
 def llm_export_to_docx(job_id: str, run_id: str):
     """Convert a completed LLM run's output to a Word document."""
