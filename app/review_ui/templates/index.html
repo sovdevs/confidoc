@@ -1941,7 +1941,7 @@ function buildHighlightedHtml(text, entities) {
     if (e.start > pos) html += escHtml(text.slice(pos, e.start));
     const baseCls = labelClass(e.label).replace("entity-label ", "");
     const manualCls = e.manual ? " manual-mark" : "";
-    html += `<mark class="highlight ${baseCls}${manualCls}" title="${e.label}: ${escHtml(e.text)}">${escHtml(text.slice(e.start, e.end))}</mark>`;
+    html += `<mark class="highlight ${baseCls}${manualCls}" data-eid="${e.id}" title="${e.label}: ${escHtml(e.text)}">${escHtml(text.slice(e.start, e.end))}</mark>`;
     pos = e.end;
   }
   if (pos < text.length) html += escHtml(text.slice(pos));
@@ -2033,6 +2033,19 @@ function getTextOffset(container, targetNode, targetOffset) {
   }
   return pos;
 }
+
+// Click on a highlighted span → scroll its entity card into view and flash it
+document.getElementById("text-preview").addEventListener("click", (evt) => {
+  const mark = evt.target.closest("mark.highlight[data-eid]");
+  if (!mark) return;
+  const eid = mark.dataset.eid;
+  const card = document.querySelector(`.entity-card[data-entity-id="${eid}"]`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  card.style.outline = "2px solid var(--accent)";
+  card.style.transition = "outline .1s";
+  setTimeout(() => { card.style.outline = ""; }, 1200);
+});
 
 document.getElementById("text-preview").addEventListener("mouseup", (evt) => {
   if (!currentJob || !rawText) return;
