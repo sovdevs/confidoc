@@ -1,15 +1,4 @@
-"""Ingest stage: render PDF pages via PyMuPDF → BYOK vision LLM → extracted markdown.
-
-Replaces the pdf_to_markdown.pipeline.run_batch() call with our own extraction
-loop so that:
-  - Scanned (image-only) PDFs are handled correctly via vision LLM.
-  - The LLM provider is configurable via BYOK (openrouter / openai / localhost).
-  - The extraction prompt is appropriate for medical documents, not hard-wired
-    to Italian urban planning (the original pdf_to_markdown use case).
-
-pdf_to_markdown is still used for export utilities (md_to_segments, write_tmx,
-write_csv) — only its internal LLM pipeline is bypassed here.
-"""
+"""Ingest stage: render PDF pages via PyMuPDF → local OCR or vision LLM → extracted markdown."""
 
 import asyncio
 import re
@@ -113,7 +102,11 @@ async def _extract_pages(
         async with semaphore:
             if provider == "tesseract":
                 from app.services.local_ocr import tesseract_page
-                lang = override_model or "deu+eng"
+                # The model field doubles as a language code for Tesseract.
+                # Reject anything that looks like a cloud model name (contains
+                # "/" or long hyphenated segments) and fall back to the default.
+                raw = (override_model or "").strip()
+                lang = raw if re.match(r'^[a-z]{2,4}(_[a-zA-Z]+)?(\+[a-z]{2,4}(_[a-zA-Z]+)?)*$', raw) else "deu+eng"
                 return await tesseract_page(image_bytes, lang=lang)
             if provider == "surya":
                 from app.services.local_ocr import surya_page
