@@ -650,7 +650,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 </div>
 
 <!-- ── Rehydrate confirmation modal ───────────────────────────── -->
-<div id="rehydrate-modal" class="hidden" style="position:fixed;inset:0;z-index:850;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center">
+<div id="rehydrate-modal" style="position:fixed;inset:0;z-index:850;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center">
   <div style="width:340px;background:var(--zone1-bg);border:1.5px solid var(--zone1-border);border-radius:14px;padding:28px 24px;display:flex;flex-direction:column;gap:14px">
     <div style="display:flex;align-items:center;gap:10px">
       <div class="z1-dot"></div>
@@ -3635,15 +3635,16 @@ let _rehydrateFormat = "md";
 
 function _openRehydrateModal(fmt) {
   _rehydrateFormat = fmt;
+  const m = document.getElementById("rehydrate-modal");
+  if (!m) return;
   document.getElementById("rehydrate-password").value = "";
   document.getElementById("rehydrate-error").style.display = "none";
-  document.getElementById("rehydrate-modal").classList.remove("hidden");
-  document.getElementById("rehydrate-modal").style.display = "flex";
+  m.style.display = "flex";
   setTimeout(() => document.getElementById("rehydrate-password").focus(), 50);
 }
 function _closeRehydrateModal() {
-  document.getElementById("rehydrate-modal").classList.add("hidden");
-  document.getElementById("rehydrate-modal").style.display = "none";
+  const m = document.getElementById("rehydrate-modal");
+  if (m) m.style.display = "none";
 }
 
 document.getElementById("llm-btn-rehydrate")?.addEventListener("click", () => _openRehydrateModal("md"));
@@ -3802,6 +3803,8 @@ function showLogin(msg) {
   // Dismiss entity picker — its pickerSelection would be stale after re-login
   hidePicker?.();
   clearPoll?.();
+  // Close rehydrate modal if it was open (session expiry mid-flow)
+  _closeRehydrateModal?.();
   document.getElementById("login-overlay").classList.remove("hidden");
   const hu = document.getElementById("header-user");
   if (hu) hu.style.display = "none";
