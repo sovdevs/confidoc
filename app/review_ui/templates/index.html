@@ -926,16 +926,18 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             <div class="form-group" style="flex:0 0 140px">
               <label>Provider</label>
               <select id="ocr-provider" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;width:100%"
-                data-tip="LLM provider for OCR extraction — leave blank to use the server default">
+                data-tip="OCR engine — local engines keep PHI on-machine; cloud LLMs send page images to external APIs">
                 <option value="">server default</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="openai">OpenAI</option>
-                <option value="google">Google (direct)</option>
+                <option value="tesseract">Tesseract (local)</option>
+                <option value="surya">Surya OCR (local)</option>
+                <option value="openrouter">OpenRouter ⚠ cloud</option>
+                <option value="openai">OpenAI ⚠ cloud</option>
+                <option value="google">Google ⚠ cloud</option>
                 <option value="localhost">Localhost</option>
               </select>
             </div>
-            <div class="form-group">
-              <label style="display:flex;align-items:center;gap:6px">
+            <div class="form-group" id="ocr-model-group">
+              <label id="ocr-model-label" style="display:flex;align-items:center;gap:6px">
                 Model
                 <span id="model-load-status" style="font-size:10px;color:var(--muted)"></span>
               </label>
@@ -943,11 +945,14 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
                      autocomplete="off"
                      style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:7px 8px;font-size:12px;width:100%;outline:none"
                      placeholder="server default"
-                     data-tip="Vision model for OCR — type or pick from the list. Leave blank for the server default.">
+                     data-tip="For cloud LLMs: vision model ID. For Tesseract: language codes e.g. deu+eng.">
               <datalist id="model-suggestions"></datalist>
             </div>
           </div>
-          <div class="form-group">
+          <div id="ocr-cloud-warning" style="display:none;margin-bottom:8px;padding:8px 10px;background:#3a1a00;border:1px solid #c84820;border-radius:7px;font-size:11px;color:#e07050">
+            ⚠ <strong>Cloud OCR selected</strong> — raw document page images (which may contain patient data) will be sent to an external API. Only proceed if you have informed consent or are using synthetic data.
+          </div>
+          <div class="form-group" id="ocr-key-group">
             <label>API key <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
             <input type="text" id="ocr-api-key" placeholder="leave blank — uses server configured key"
                    autocomplete="off" spellcheck="false"
@@ -2332,16 +2337,20 @@ async function loadModelInfo() {
     if (modelInput) modelInput.placeholder = cfg.byok_only ? "required" : cfg.pdf_model;
     await initDemoCapture(cfg);
   } catch(_) {}
-  // Populate model list for whichever provider is currently selected
+  // Populate model list + update provider UI for current selection
   const providerEl = document.getElementById("ocr-provider");
-  if (providerEl) await loadProviderModels(providerEl.value || _defaultPdfProvider);
+  if (providerEl) {
+    _updateProviderUI(providerEl.value);
+    const eff = providerEl.value || _defaultPdfProvider;
+    if (!_LOCAL_OCR_PROVIDERS.has(eff)) await loadProviderModels(eff);
+  }
 }
 
 async function loadProviderModels(provider) {
   const datalist   = document.getElementById("model-suggestions");
   const statusEl   = document.getElementById("model-load-status");
   if (!datalist) return;
-  if (provider === "localhost" || !provider) {
+  if (provider === "localhost" || !provider || _LOCAL_OCR_PROVIDERS.has(provider)) {
     datalist.innerHTML = "";
     if (statusEl) statusEl.textContent = "";
     return;
@@ -2364,11 +2373,16 @@ async function loadProviderModels(provider) {
   }
 }
 
+const _LOCAL_OCR_PROVIDERS = new Set(["tesseract", "surya"]);
+const _CLOUD_OCR_PROVIDERS  = new Set(["openrouter", "openai", "google"]);
+
 const _keyPlaceholders = {
   "openrouter": "sk-or-v1-… (OpenRouter key)",
   "openai":     "sk-… (OpenAI key)",
   "google":     "AIza… (Google AI Studio key — not OpenRouter)",
   "localhost":  "leave blank",
+  "tesseract":  "not required — local OCR",
+  "surya":      "not required — local OCR",
   "":           "leave blank — uses server configured key",
 };
 
@@ -2377,11 +2391,43 @@ function _updateKeyHint(provider) {
   if (el) el.placeholder = _keyPlaceholders[provider] ?? "leave blank — uses server configured key";
 }
 
+function _updateProviderUI(provider) {
+  const eff = provider || _defaultPdfProvider;
+  const isLocal = _LOCAL_OCR_PROVIDERS.has(eff);
+  const isCloud = _CLOUD_OCR_PROVIDERS.has(eff);
+
+  // Cloud warning
+  const warn = document.getElementById("ocr-cloud-warning");
+  if (warn) warn.style.display = isCloud ? "block" : "none";
+
+  // API key row — hide for local providers
+  const keyGroup = document.getElementById("ocr-key-group");
+  if (keyGroup) keyGroup.style.display = isLocal ? "none" : "";
+
+  // Model field label + placeholder
+  const modelLabel = document.getElementById("ocr-model-label");
+  const modelInput = document.getElementById("ocr-model");
+  if (eff === "tesseract") {
+    if (modelLabel) modelLabel.firstChild.textContent = "Languages ";
+    if (modelInput) { modelInput.placeholder = "deu+eng"; modelInput.value = modelInput.value || ""; }
+  } else if (eff === "surya") {
+    const modelGroup = document.getElementById("ocr-model-group");
+    if (modelGroup) modelGroup.style.display = "none";
+  } else {
+    const modelGroup = document.getElementById("ocr-model-group");
+    if (modelGroup) modelGroup.style.display = "";
+    if (modelLabel) modelLabel.firstChild.textContent = "Model ";
+    if (modelInput) modelInput.placeholder = "server default";
+  }
+
+  _updateKeyHint(provider);
+}
+
 // Reload model list when provider or API key changes
 document.getElementById("ocr-provider")?.addEventListener("change", function() {
   const p = this.value || _defaultPdfProvider;
-  _updateKeyHint(this.value);
-  loadProviderModels(p);
+  _updateProviderUI(this.value);
+  if (!_LOCAL_OCR_PROVIDERS.has(p)) loadProviderModels(p);
 });
 // Debounced reload on API key input (useful for Google direct)
 let _keyDebounce = null;

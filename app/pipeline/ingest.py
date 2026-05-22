@@ -84,8 +84,11 @@ async def _extract_pages(
     override_model: str | None = None,
     override_api_key: str | None = None,
 ) -> str:
-    """Render each PDF page as PNG, save previews, send to vision LLM, return assembled markdown."""
+    """Render each PDF page as PNG, save previews, extract text (local OCR or vision LLM)."""
     import fitz  # PyMuPDF
+    from app.services.local_ocr import LOCAL_PROVIDERS
+
+    provider = override_provider or settings.pdf_provider
 
     with fitz.open(str(pdf_path)) as doc:
         total = len(doc)
@@ -95,7 +98,7 @@ async def _extract_pages(
         job.page_count = total
         job_store.save(job)
 
-        # Render all pages first so we can save previews regardless of LLM outcome
+        # Render all pages first so we can save previews regardless of extraction outcome
         rendered: list[bytes] = []
         for page in doc:
             pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
@@ -108,6 +111,14 @@ async def _extract_pages(
 
     async def _one(page_num: int, image_bytes: bytes) -> str:
         async with semaphore:
+            if provider == "tesseract":
+                from app.services.local_ocr import tesseract_page
+                lang = override_model or "deu+eng"
+                return await tesseract_page(image_bytes, lang=lang)
+            if provider == "surya":
+                from app.services.local_ocr import surya_page
+                return await surya_page(image_bytes)
+            # Cloud vision LLM path
             result = await llm_adapter.pdf_complete_vision(
                 images=[image_bytes],
                 text_prompt=_page_prompt(page_num, total),
@@ -116,7 +127,7 @@ async def _extract_pages(
                 override_model=override_model,
                 override_api_key=override_api_key,
             )
-        return _strip_fences(result)
+            return _strip_fences(result)
 
     pages_md = await asyncio.gather(
         *[_one(i + 1, png) for i, png in enumerate(rendered)]

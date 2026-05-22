@@ -63,9 +63,13 @@ def list_inputs():
     return {"files": pdfs}
 
 
-def _check_byok(api_key: str) -> None:
-    """Raise 403 if BYOK-only mode is active and no user key was supplied."""
-    if settings.byok_only and not api_key.strip():
+def _check_byok(api_key: str, provider: str = "") -> None:
+    """Raise 403 if BYOK-only mode is active and no user key was supplied.
+
+    Local OCR providers (tesseract, surya) never need an API key.
+    """
+    from app.services.local_ocr import LOCAL_PROVIDERS
+    if settings.byok_only and not api_key.strip() and provider not in LOCAL_PROVIDERS:
         raise HTTPException(
             403,
             "This deployment requires you to supply your own API key. "
@@ -84,7 +88,7 @@ async def process_input(
     pdf_api_key: str = Form(""),
 ):
     """Start a pipeline job for a PDF already in data/input/."""
-    _check_byok(pdf_api_key)
+    _check_byok(pdf_api_key, pdf_provider or settings.pdf_provider)
     pdf_path = settings.input_dir / filename
     if not pdf_path.exists():
         raise HTTPException(404, f"{filename} not found in input directory")
@@ -128,7 +132,7 @@ async def upload(
     pdf_model: str = Form(""),
     pdf_api_key: str = Form(""),
 ):
-    _check_byok(pdf_api_key)
+    _check_byok(pdf_api_key, pdf_provider or settings.pdf_provider)
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "PDF files only.")
 

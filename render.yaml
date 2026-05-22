@@ -17,9 +17,9 @@ services:
       - key: PORT
         value: 8100
       - key: CONFIDOC_PDF_PROVIDER
-        value: google
+        value: tesseract
       - key: CONFIDOC_PDF_MODEL
-        value: gemini-2.0-flash
+        value: deu+eng
       - key: CONFIDOC_ANON_PROVIDER
         value: google
       - key: CONFIDOC_ANON_MODEL

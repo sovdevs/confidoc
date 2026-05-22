@@ -1,5 +1,13 @@
 FROM python:3.12-slim
 
+# System deps: Tesseract OCR with German + English language packs (local OCR, no cloud)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-deu \
+    tesseract-ocr-eng \
+    tesseract-ocr-fra \
+    && rm -rf /var/lib/apt/lists/*
+
 # uv for fast, reproducible installs
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
