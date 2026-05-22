@@ -241,6 +241,10 @@ main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .lbl-diagnosis       { background:#2a0808; color:#e05040; }
 .lbl-medication      { background:#1a0a2a; color:#a060d0; }
 .lbl-other_pii       { background:#1a1d27; color:#8090a0; }
+.lbl-tax_info        { background:#092818; color:#25c870; }
+.lbl-web_address     { background:#091830; color:#3898e8; }
+.lbl-home_address    { background:#281008; color:#c84820; }
+.lbl-other_individual{ background:#1a0e28; color:#a868d0; }
 .lbl-other           { background:#141720; color:var(--muted); }
 
 .entity-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-left: auto; }
@@ -1522,6 +1526,10 @@ function labelClass(lbl) {
     diagnosis:        "lbl-diagnosis",
     medication:       "lbl-medication",
     other_pii:        "lbl-other_pii",
+    tax_info:         "lbl-tax_info",
+    web_address:      "lbl-web_address",
+    home_address:     "lbl-home_address",
+    other_individual: "lbl-other_individual",
   };
   return "entity-label " + (map[lbl.toLowerCase()] || "lbl-other");
 }
@@ -2075,12 +2083,16 @@ const LABELS = [
   {label:"ID_NUMBER",       repl:"[ID_NUMBER]"},
   {label:"PHONE",           repl:"[PHONE]"},
   {label:"EMAIL",           repl:"[EMAIL]"},
-  {label:"ORGANIZATION",    repl:"[ORGANIZATION]"},
-  {label:"INSURANCE_ID",    repl:"[INSURANCE_ID]"},
-  {label:"BANK_INFORMATION",repl:"[BANK_INFORMATION]"},
-  {label:"DIAGNOSIS",       repl:"[DIAGNOSIS]"},
-  {label:"MEDICATION",      repl:"[MEDICATION]"},
-  {label:"OTHER_PII",       repl:"[OTHER_PII]"},
+  {label:"ORGANIZATION",     repl:"[ORGANIZATION]"},
+  {label:"INSURANCE_ID",     repl:"[INSURANCE_ID]"},
+  {label:"BANK_INFORMATION", repl:"[BANK_INFORMATION]"},
+  {label:"TAX_INFO",         repl:"[TAX_INFO]"},
+  {label:"WEB_ADDRESS",      repl:"[WEB_ADDRESS]"},
+  {label:"HOME_ADDRESS",     repl:"[HOME_ADDRESS]"},
+  {label:"DIAGNOSIS",        repl:"[DIAGNOSIS]"},
+  {label:"MEDICATION",       repl:"[MEDICATION]"},
+  {label:"OTHER_INDIVIDUAL", repl:"[OTHER_INDIVIDUAL]"},
+  {label:"OTHER_PII",        repl:"[OTHER_PII]"},
 ];
 
 function getTextOffset(container, targetNode, targetOffset) {
@@ -4454,6 +4466,7 @@ function renderPolicyResults(data) {
 let _demoCapture = false;   // set from /api/config
 let _demoKeyAvailable = false;  // server-side demo key configured
 let _activeDemoRunId = null;
+let _autoLoadedDemoJobId = null;  // cached job from auto-load on Demo tab click
 
 async function initDemoCapture(cfg) {
   if (!cfg.demo_capture) return;
@@ -4525,7 +4538,43 @@ document.getElementById("src-tab-demo")?.addEventListener("click", function() {
   document.getElementById("wizard-step-run").style.display = "";
   const grid = document.querySelector("#upload-pane .wizard-step > div[style*='grid']");
   if (grid) grid.style.display = "none";
+  _autoLoadFirstDemoJob();
 });
+
+async function _autoLoadFirstDemoJob() {
+  // If we already loaded a demo job this session, just re-select it
+  if (_autoLoadedDemoJobId) {
+    await selectJob(_autoLoadedDemoJobId);
+    return;
+  }
+  const sel = document.getElementById("demo-file-select");
+  if (!sel) return;
+  // Use current selection or fall back to first real option
+  const filename = sel.value || (Array.from(sel.options).find(o => o.value)?.value);
+  if (!filename) return;
+  sel.value = filename;
+
+  const hint = document.getElementById("demo-key-hint");
+  if (hint) { hint.textContent = "Loading demo…"; hint.style.color = "var(--muted)"; }
+
+  const fd = _demoKeyAvailable ? new FormData() : ocrFormData();
+  fd.append("src_lang", document.getElementById("src-lang")?.value || "de-DE");
+  fd.append("tgt_lang", document.getElementById("tgt-lang")?.value || "en-GB");
+  try {
+    const res = await api(
+      `/api/demo/inputs/${encodeURIComponent(filename)}/process`,
+      {method: "POST", body: fd}
+    );
+    _autoLoadedDemoJobId = res.job_id;
+    _activeDemoRunId = res.demo_run_id;
+    await loadJobs();
+    viewMode = "entities";
+    await selectJob(res.job_id);
+  } catch(err) {
+    showToast(err.message || "Demo load failed", "error");
+    if (hint) { hint.textContent = ""; }
+  }
+}
 
 document.getElementById("src-tab-local")?.addEventListener("click", function() {
   document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
@@ -4551,17 +4600,12 @@ document.getElementById("src-tab-server")?.addEventListener("click", async funct
   await initServerTab();
 });
 
-// Demo file select → sets selectedFolderFile and updates run hint
+// Demo file select → auto-load the selected document immediately
 document.getElementById("demo-file-select")?.addEventListener("change", function() {
   const f = this.value;
   if (!f) return;
-  selectedFolderFile = f;
-  selectedName.textContent = f;
-  document.getElementById("selected-file-row").style.display = "block";
-  document.getElementById("run-btn").disabled = false;
-  document.getElementById("run-hint").textContent = "Demo capture will start automatically.";
-  // Signal that this is a demo file
-  runBtn._isDemo = true;
+  _autoLoadedDemoJobId = null;  // reset cache so a different selection re-loads
+  _autoLoadFirstDemoJob();
 });
 
 // Patch runBtn to use demo endpoint when in demo mode

@@ -28,15 +28,19 @@ logger = logging.getLogger(__name__)
 
 # ── Label descriptions — few-shot guidance without raw PII values ─────────────
 _LABEL_DESCRIPTIONS: dict[str, str] = {
-    "PATIENT_NAME":   "patient full names (first and/or last name)",
-    "PHYSICIAN_NAME": "doctor or physician surnames, often after a letter closing such as 'Mit freundlichen Grüßen'",
-    "DATE":           "dates in any format (DD.MM.YYYY, YYYY-MM-DD, written out, …)",
-    "ADDRESS":        "street addresses including street name and building number",
-    "LOCATION":       "postal/zip codes combined with city names",
-    "ORGANIZATION":   "named clinics, hospitals, labs, insurers, companies — e.g. 'MediCore International Health Services', 'Universitätsklinikum Frankfurt'",
-    "CASE_ID":        "case reference or patient record numbers",
-    "ID_NUMBER":      "insurance policy or national ID numbers",
-    "PHONE":          "telephone or fax numbers",
+    "PATIENT_NAME":     "patient full names (first and/or last name)",
+    "PHYSICIAN_NAME":   "doctor or physician surnames, often after a letter closing such as 'Mit freundlichen Grüßen'",
+    "DATE":             "dates in any format (DD.MM.YYYY, YYYY-MM-DD, written out, …)",
+    "ADDRESS":          "street addresses including street name and building number",
+    "LOCATION":         "postal/zip codes combined with city names",
+    "ORGANIZATION":     "named clinics, hospitals, labs, insurers, companies — e.g. 'MediCore International Health Services', 'Universitätsklinikum Frankfurt'",
+    "CASE_ID":          "case reference or patient record numbers",
+    "ID_NUMBER":        "insurance policy or national ID numbers",
+    "PHONE":            "telephone or fax numbers",
+    "TAX_INFO":         "tax IDs, VAT numbers, Steuer-ID, Steuernummer, fiscal codes",
+    "WEB_ADDRESS":      "URLs, email addresses used as web identifiers, website domains",
+    "HOME_ADDRESS":     "personal residential address when distinct from a clinical or business address",
+    "OTHER_INDIVIDUAL": "names of non-patient individuals (relatives, legal guardians, witnesses, contact persons)",
 }
 
 _SYSTEM_PROMPT = """\
@@ -50,7 +54,8 @@ plain form that should have been redacted.
 
 Return your findings as a JSON array.  Each element must have exactly two keys:
   "label" — one of: PATIENT_NAME, PHYSICIAN_NAME, DATE, ADDRESS, LOCATION,
-                     ORGANIZATION, CASE_ID, ID_NUMBER, PHONE
+                     ORGANIZATION, CASE_ID, ID_NUMBER, PHONE,
+                     TAX_INFO, WEB_ADDRESS, HOME_ADDRESS, OTHER_INDIVIDUAL
   "text"  — the EXACT verbatim substring as it still appears in the partially-redacted
              document.  Copy character-for-character, including OCR artefacts.
 
@@ -66,6 +71,13 @@ is a strong signal.
 - ADDRESS vs LOCATION: flag the street+number as ADDRESS and the postcode+city as LOCATION \
 separately when they appear together. "Reuterweg 14" is ADDRESS; "60486 Frankfurt am Main" \
 is LOCATION.
+- HOME_ADDRESS: use when the address clearly belongs to the patient's personal residence \
+(e.g. "Heimatanschrift:", "Wohnort:") rather than a clinic or workplace.
+- TAX_INFO: flag Steuer-ID, Steuernummer, VAT/USt-IdNr, or fiscal identification numbers.
+- WEB_ADDRESS: flag URLs (http/https), bare domains (e.g. "www.praxis-mueller.de"), \
+and email-format strings not already covered by EMAIL.
+- OTHER_INDIVIDUAL: flag names of non-patient people — relatives, legal guardians, \
+contact persons, witnesses — when identifiable as a personal name.
 - If nothing was missed, return [].
 """
 
