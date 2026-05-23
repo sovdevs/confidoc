@@ -104,6 +104,7 @@ class Settings:
     prepared_packages_dir: Path = DATA / "prepared_packages"  # Zone 2 export packages
     llm_runs_dir: Path = DATA / "llm_runs"                   # LLM export run artifacts
     reports_dir: Path = DATA / "reports"                     # report packages per job
+    learning_dir: Path = DATA / "learning"                   # encrypted entity learning store
     source_configs_dir: Path = DATA / "source_configs"       # sources.json (operator-managed)
     ingest_registry_path: Path = DATA / "zone1" / "ingest_registry.jsonl"
     gateway_local_dir: Path = DATA / "gateway" / "local"
@@ -134,6 +135,7 @@ class Settings:
             self.zone1_previews_dir, self.prepared_packages_dir, self.llm_runs_dir,
             self.source_configs_dir,
             self.reports_dir,
+            self.learning_dir,
             self.ingest_registry_path.parent,  # data/zone1/
             self.gateway_local_dir,
             self.gateway_sftp_dir,

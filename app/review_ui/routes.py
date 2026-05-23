@@ -15,6 +15,7 @@ from app.pipeline import anon, anon_llm, export, ingest, ocr_check
 from app.storage import mappings as mapping_store
 from app.storage import audit_log
 from app.storage import jobs as job_store
+from app.storage import learning as learning_store
 from app.storage.jobs import Entity, Job, JobStatus
 from app.services import demo_capture
 
@@ -323,36 +324,56 @@ async def redetect(job_id: str):
     if not job.extracted_md:
         raise HTTPException(400, "Job has no extracted markdown — run ingest first")
 
-    # Stash manually-added entities before auto-detection overwrites them
-    manual_entities = [
-        Entity.model_validate(e) for e in job.entities if e.get("manual")
-    ]
+    # Snapshot human decisions before detection overwrites them
+    prev = [Entity.model_validate(e) if isinstance(e, dict) else e for e in job.entities]
+    approved_entities = [e for e in prev if e.approved and not e.manual]
+    manual_entities   = [e for e in prev if e.manual]
+    ignored_set       = learning_store.get_ignored_set(settings.learning_dir, job_id)
 
     try:
-        job = anon.run(job)                # regex pass
-        job = await anon_llm.run(job)      # LLM pass with approved-terms few-shots
+        job = anon.run(job)
+        job = await anon_llm.run(job)
     except Exception as e:
         raise HTTPException(500, str(e))
 
-    # Merge manual entities back — skip any whose span overlaps an auto-detected one
-    auto = [Entity.model_validate(e) for e in job.entities]
-    auto_spans = [(e.start, e.end) for e in auto]
-    merged = list(auto)
+    new_suggestions = [Entity.model_validate(e) if isinstance(e, dict) else e
+                       for e in job.entities]
+
+    # Merge: approved always win; filter new suggestions against approved spans + ignored set
+    approved_spans = [(e.start, e.end) for e in approved_entities]
+    filtered, discarded_overlap, discarded_ignored = [], 0, 0
+    for e in new_suggestions:
+        if any(e.start < end and e.end > start for start, end in approved_spans):
+            discarded_overlap += 1
+            continue
+        if (e.text.strip().lower(), e.label) in ignored_set:
+            discarded_ignored += 1
+            continue
+        filtered.append(e)
+
+    merged = approved_entities + filtered
+    all_spans = [(e.start, e.end) for e in merged]
+    manual_kept = 0
     for m in manual_entities:
-        overlaps = any(s < m.end and m.start < e for s, e in auto_spans)
-        if not overlaps:
+        if not any(m.start < end and m.end > start for start, end in all_spans):
             merged.append(m)
+            manual_kept += 1
     merged.sort(key=lambda e: e.start)
 
     job_store.update_status(job_id, job.status, entities=[e.model_dump() for e in merged])
     job = job_store.load(job_id)
 
-    audit_log.log(job_id, "redetect", {
-        "auto": len(auto),
-        "manual_preserved": len(manual_entities),
-        "total": len(merged),
-    })
-    return job.model_dump()
+    stats = {
+        "new_suggestions":   len(new_suggestions),
+        "kept_approved":     len(approved_entities),
+        "added_new":         len(filtered),
+        "discarded_overlap": discarded_overlap,
+        "discarded_ignored": discarded_ignored,
+        "manual_preserved":  manual_kept,
+        "total":             len(merged),
+    }
+    audit_log.log(job_id, "redetect", stats)
+    return {"job": job.model_dump(), "stats": stats}
 
 
 # ── Manual entity addition ────────────────────────────────────────────────────
@@ -390,14 +411,32 @@ def add_entity(
 
 # ── Review actions ───────────────────────────────────────────────────────────
 
+def _entity_context(job: Job, entity: Entity, window: int = 40) -> tuple[str, str]:
+    """Return (text_before, text_after) the entity span, for learning context."""
+    if not job.extracted_md:
+        return ("", "")
+    try:
+        text = (settings.jobs_dir.parent / job.extracted_md).read_text(encoding="utf-8")
+        return (text[max(0, entity.start - window):entity.start],
+                text[entity.end:entity.end + window])
+    except Exception:
+        return ("", "")
+
+
 @router.post("/api/jobs/{job_id}/entities/{entity_id}/approve")
 def approve_entity(job_id: str, entity_id: str):
     job = _require_job(job_id)
-    # Capture before state for event log
     old_entity = next((Entity.model_validate(e) for e in job.entities if e.id == entity_id), None)
     job = _update_entity(job, entity_id, approved=True)
     audit_log.log(job_id, "entity_approved", {"entity_id": entity_id})
     if old_entity:
+        ctx_before, ctx_after = _entity_context(job, old_entity)
+        learning_store.add_positive(
+            settings.learning_dir, job_id, entity_id,
+            text=old_entity.text, label=old_entity.label,
+            replacement=old_entity.replacement or "",
+            context_before=ctx_before, context_after=ctx_after,
+        )
         demo_capture.log_entity_event(
             job_id, "approve", entity_id,
             old_label=old_entity.label, new_label=old_entity.label,
@@ -408,13 +447,17 @@ def approve_entity(job_id: str, entity_id: str):
     return {"ok": True}
 
 
-@router.post("/api/jobs/{job_id}/entities/{entity_id}/dismiss")
-def dismiss_entity(job_id: str, entity_id: str):
+def _do_ignore(job_id: str, entity_id: str) -> dict:
+    """Shared logic for ignore (was dismiss) — negative learning, dismissed=True."""
     job = _require_job(job_id)
     old_entity = next((Entity.model_validate(e) for e in job.entities if e.id == entity_id), None)
     job = _update_entity(job, entity_id, approved=False, dismissed=True)
-    audit_log.log(job_id, "entity_dismissed", {"entity_id": entity_id})
+    audit_log.log(job_id, "entity_ignored", {"entity_id": entity_id})
     if old_entity:
+        learning_store.add_negative(
+            settings.learning_dir, job_id, entity_id,
+            text=old_entity.text, label=old_entity.label,
+        )
         demo_capture.log_entity_event(
             job_id, "reject", entity_id,
             old_label=old_entity.label, new_label=old_entity.label,
@@ -425,9 +468,20 @@ def dismiss_entity(job_id: str, entity_id: str):
     return {"ok": True}
 
 
+@router.post("/api/jobs/{job_id}/entities/{entity_id}/ignore")
+def ignore_entity(job_id: str, entity_id: str):
+    return _do_ignore(job_id, entity_id)
+
+
+@router.post("/api/jobs/{job_id}/entities/{entity_id}/dismiss")
+def dismiss_entity(job_id: str, entity_id: str):
+    """Backward-compat alias for /ignore."""
+    return _do_ignore(job_id, entity_id)
+
+
 @router.delete("/api/jobs/{job_id}/entities/{entity_id}")
 def delete_entity(job_id: str, entity_id: str):
-    """Permanently remove an entity so the text span can be re-annotated."""
+    """Remove annotation so the span can be re-annotated. No learning effect."""
     job = _require_job(job_id)
     old_entity = next((Entity.model_validate(e) for e in job.entities if e.id == entity_id), None)
     before = len(job.entities)
@@ -436,6 +490,8 @@ def delete_entity(job_id: str, entity_id: str):
         raise HTTPException(404, f"Entity {entity_id} not found")
     job_store.save(job)
     audit_log.log(job_id, "entity_deleted", {"entity_id": entity_id})
+    # Remove from learning store — delete is not negative training
+    learning_store.remove(settings.learning_dir, job_id, entity_id)
     if old_entity:
         demo_capture.log_entity_event(
             job_id, "delete", entity_id,

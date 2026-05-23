@@ -268,7 +268,7 @@ main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .entity-card.approved  { border-color: #2d6048; background: #0d2018; }
 .entity-card.dismissed { border-color: #5a2828; background: #1a0e0e; opacity: .65; }
 .entity-card.manual { border-style: dashed; }
-.entity-card.manual .entity-head::after { content: "manual"; font-size: 9px;
+.entity-card.manual .entity-head::after { content: ""; font-size: 9px;
   color: var(--warning); margin-left: auto; letter-spacing: .5px; }
 .entity-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
                background: #15182a; }
@@ -297,10 +297,18 @@ main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .lbl-other_individual{ background:#1a0e28; color:#a868d0; }
 .lbl-other           { background:#141720; color:var(--muted); }
 
-.entity-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-left: auto; }
-.entity-status-dot.approved { background: var(--success); }
+.entity-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.entity-status-dot.approved  { background: var(--success); }
 .entity-status-dot.dismissed { background: var(--muted); }
-.entity-status-dot.pending { background: var(--border); }
+.entity-status-dot.pending   { background: var(--border); }
+
+/* Entity provenance badges */
+.ent-prov { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 8px;
+             letter-spacing: .3px; text-transform: uppercase; flex-shrink: 0; }
+.prov-ai       { background: rgba(255,255,255,.06); color: var(--muted); }
+.prov-approved { background: rgba(22,163,74,.15);  color: #4ade80; }
+.prov-ignored  { background: rgba(239,68,68,.12);  color: #f87171; }
+.prov-manual   { background: rgba(37,99,235,.15);  color: #60a5fa; }
 
 .entity-body { padding: 8px 10px; }
 .entity-orig { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
@@ -1890,7 +1898,7 @@ function renderViewTabs(j) {
   const canPolicy    = ["reviewing","approved","normalizing","normalized","done"].includes(j.status);
   const canMapping   = !!j.mapping_path;
 
-  let html = `<button class="view-tab ${viewMode==="entities"?"active":""}" data-view="entities" data-tip="Review detected PII entities — approve or dismiss each one before exporting">Entities</button>`;
+  let html = `<button class="view-tab ${viewMode==="entities"?"active":""}" data-view="entities" data-tip="Review detected PII entities — approve or ignore each one before exporting">Entities</button>`;
   if (canNormalize) html += `<button class="view-tab ${viewMode==="ocr"?"active":""}" data-view="ocr" data-tip="Optional — correct OCR artefacts in the extracted text before it reaches the export">OCR Check <span style="font-size:9px;font-weight:400;opacity:.5">(optional)</span></button>`;
   if (canMapping)   html += `<button class="view-tab ${viewMode==="mapping"?"active":""}" data-view="mapping" data-tip="Zone 1 only — view the token mapping between pseudonymized placeholders and original values" data-tip-color="red">🔑 Mapping</button>`;
   if (canPolicy)    html += `<button class="view-tab ${viewMode==="policy"?"active":""}" data-view="policy" data-tip="Generate a policy-compliant export package or send to an LLM — no PHI included" data-tip-color="purple">Export</button>`;
@@ -2129,7 +2137,7 @@ function _entityBarConfig(j, state) {
     return { status: "Run OCR extraction first.", buttons: [] };
   if (ent.state === "needs_review")
     return {
-      status: `<strong>${unresolved}</strong> unresolved ${unresolved === 1 ? "entity" : "entities"} — approve or dismiss each one before export.`,
+      status: `<strong>${unresolved}</strong> unresolved ${unresolved === 1 ? "entity" : "entities"} — approve or ignore each one before export.`,
       buttons: [
         { id:"bar-redetect",   label:"↺ Re-detect", cls:"btn-ghost", tip:"Re-run LLM entity detection" },
         { id:"bar-approve-all",label:"Approve All",  cls:"btn-primary", tip:"Approve all and generate pseudonymized export", tc:"red" },
@@ -2189,11 +2197,17 @@ function renderEntities(j) {
   el.innerHTML = j.entities.map((e,i) => {
     const state = e.approved ? "approved" : (e.dismissed ? "dismissed" : "pending");
     const manualCls = e.manual ? " manual" : "";
+    // Provenance badge
+    const provenance = e.manual    ? `<span class="ent-prov prov-manual"  data-tip="Added manually by a reviewer">✏ Manual</span>`
+                     : e.dismissed ? `<span class="ent-prov prov-ignored" data-tip="Ignored — will be suppressed on Re-Detect">✗ Ignored</span>`
+                     : e.approved  ? `<span class="ent-prov prov-approved" data-tip="Approved — preserved on Re-Detect">✓ Approved</span>`
+                     :               `<span class="ent-prov prov-ai"       data-tip="AI suggested — awaiting review">AI</span>`;
     return `
     <div class="entity-card ${state}${manualCls}" data-idx="${i}" data-id="${e.id}" data-entity-id="${e.id}">
       <div class="entity-head">
         <span class="${labelClass(e.label)}">${e.label}</span>
-        <div class="entity-status-dot ${state}"></div>
+        ${provenance}
+        <div class="entity-status-dot ${state}" style="margin-left:auto"></div>
       </div>
       <div class="entity-body">
         <div class="entity-orig">Original: <strong>${escHtml(e.text)}</strong></div>
@@ -2201,15 +2215,15 @@ function renderEntities(j) {
       </div>
       ${reviewing ? `
       <div class="entity-actions">
-        <button class="btn btn-success btn-sm" data-action="approve" data-id="${e.id}" data-tip="Confirm this entity should be pseudonymized — replaces it with a stable token in the export">✓ Approve</button>
-        <button class="btn btn-danger  btn-sm" data-action="dismiss" data-id="${e.id}" data-tip="Mark as not PII — this text will remain unchanged in the export">✗ Dismiss</button>
+        <button class="btn btn-success btn-sm" data-action="approve" data-id="${e.id}" data-tip="Confirm this entity is PII — it will be pseudonymized in the export and remembered for Re-Detect">✓ Approve</button>
+        <button class="btn btn-danger  btn-sm" data-action="ignore"  data-id="${e.id}" data-tip="Not PII — suppress this suggestion in future Re-Detect runs for this document">✗ Ignore</button>
         <button class="btn btn-ghost   btn-sm" data-action="edit"    data-id="${e.id}" style="margin-left:auto" data-tip="Edit the replacement token for this entity">Edit</button>
-        <button class="btn btn-ghost   btn-sm" data-action="delete"  data-id="${e.id}" style="color:var(--danger);padding:4px 7px" data-tip="Remove this detection entirely — the span can be re-annotated by selecting text">🗑</button>
+        <button class="btn btn-ghost   btn-sm" data-action="delete"  data-id="${e.id}" style="color:var(--danger);padding:4px 7px" data-tip="Remove annotation entirely so the span can be re-drawn — does not affect learning">🗑</button>
       </div>
       <div class="entity-edit-row" id="edit-${e.id}">
         <input type="text" placeholder="${escHtml(e.replacement)}" value="${escHtml(e.replacement)}">
-        <button class="btn btn-primary btn-sm" data-action="save" data-id="${e.id}" data-tip="Save the new replacement token for this entity">Save</button>
-        <button class="btn btn-ghost   btn-sm" data-action="cancel-edit" data-id="${e.id}" data-tip="Cancel editing and keep the original token">✕</button>
+        <button class="btn btn-primary btn-sm" data-action="save" data-id="${e.id}" data-tip="Save the new replacement token">Save</button>
+        <button class="btn btn-ghost   btn-sm" data-action="cancel-edit" data-id="${e.id}" data-tip="Cancel editing">✕</button>
       </div>
       ` : ""}
     </div>
@@ -2247,14 +2261,13 @@ async function handleEntityAction(evt) {
     _scrollToNextPending(entityId);
     await api(`/api/jobs/${jobId}/entities/${entityId}/approve`, {method:"POST"});
     await refreshCurrentJob();
-  } else if (action === "dismiss") {
+  } else if (action === "ignore" || action === "dismiss") {
     const card = btn.closest(".entity-card");
     if (card) { card.classList.remove("approved"); card.classList.add("dismissed"); }
-    // Remove the highlight immediately so the span is selectable right away
     const mark = document.querySelector(`mark.highlight[data-eid="${entityId}"]`);
     if (mark) mark.outerHTML = mark.textContent;
     _scrollToNextPending(entityId);
-    await api(`/api/jobs/${jobId}/entities/${entityId}/dismiss`, {method:"POST"});
+    await api(`/api/jobs/${jobId}/entities/${entityId}/ignore`, {method:"POST"});
     await refreshCurrentJob();
   } else if (action === "delete") {
     const card = btn.closest(".entity-card");
@@ -2332,15 +2345,30 @@ function renderExportBar(j) {
 }
 
 async function redetect() {
-  const btn = document.getElementById("btn-redetect");
+  const btn = document.getElementById("btn-redetect") || document.getElementById("bar-redetect");
   if (btn) { btn.disabled = true; btn.textContent = "↺ Detecting…"; }
   try {
-    currentJob = await api(`/api/jobs/${currentJob.id}/redetect`, {method:"POST"});
+    const res = await api(`/api/jobs/${currentJob.id}/redetect`, {method:"POST"});
+    // Response is now {job, stats} — fall back to treating whole response as job for safety
+    currentJob = res.job || res;
     renderDetail();
     renderJobList();
-    showToast("Entities re-detected");
+
+    const s = res.stats;
+    if (s) {
+      const parts = [];
+      if (s.kept_approved  > 0) parts.push(`${s.kept_approved} approved preserved`);
+      if (s.discarded_ignored > 0) parts.push(`${s.discarded_ignored} ignored suppressed`);
+      if (s.manual_preserved  > 0) parts.push(`${s.manual_preserved} manual kept`);
+      const summary = parts.length ? parts.join(" · ") : `${s.total} entities detected`;
+      showToast(`Re-detect: ${summary}`);
+    } else {
+      showToast("Entities re-detected");
+    }
   } catch(e) {
     showToast(e.message || "Re-detect failed", "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↺ Re-detect"; }
   }
 }
 
