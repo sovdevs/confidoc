@@ -3,10 +3,11 @@
 import asyncio
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Body, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -55,6 +56,22 @@ def get_pipeline_state(job_id: str):
     """Compute and return the current pipeline step states for a job."""
     job = _require_job(job_id)
     return _compute_pipeline_state(job)
+
+
+@router.post("/api/jobs/{job_id}/workflow-state")
+def update_workflow_state(job_id: str, updates: dict = Body(...)):
+    """Persist optional-step state: ocr_check / reports → pending|complete|skipped."""
+    job = _require_job(job_id)
+    ws = dict(job.workflow_state or {})
+    allowed_keys = {"ocr_check", "reports"}
+    allowed_vals = {"pending", "complete", "skipped"}
+    for k, v in updates.items():
+        if k not in allowed_keys or v not in allowed_vals:
+            raise HTTPException(400, f"Invalid workflow_state update: {k}={v}")
+        ws[k] = v
+    job_store.update_status(job_id, job.status, workflow_state=ws)
+    audit_log.log(job_id, "WORKFLOW_STATE_UPDATED", updates)
+    return {"ok": True, "workflow_state": ws}
 
 
 def _compute_pipeline_state(job: Job) -> dict:
@@ -163,10 +180,27 @@ def _compute_pipeline_state(job: Job) -> dict:
     steps.append({"id": "reports", "label": "Reports", "state": rep_state,
                   "required": False, "message": rep_msg})
 
+    # Last export timestamp from prepared packages folder
+    pkg_files = list(pkg_dir.iterdir()) if pkg_dir.exists() else []
+    last_exported_at: str | None = None
+    if pkg_files:
+        latest = max(pkg_files, key=lambda f: f.stat().st_mtime)
+        last_exported_at = datetime.fromtimestamp(
+            latest.stat().st_mtime, tz=timezone.utc
+        ).isoformat()
+
+    def _iso(dt: datetime | None) -> str | None:
+        return dt.isoformat() if dt else None
+
     return {
         "job_id":      job.id,
         "steps":       steps,
         "next_action": _compute_next_action(steps, unresolved),
+        "timestamps": {
+            "last_entity_action_at":      _iso(job.last_entity_action_at),
+            "last_ocr_check_approved_at": _iso(job.last_ocr_check_approved_at),
+            "last_exported_at":           last_exported_at,
+        },
     }
 
 
@@ -429,6 +463,8 @@ def approve_entity(job_id: str, entity_id: str):
     old_entity = next((Entity.model_validate(e) for e in job.entities if e.id == entity_id), None)
     job = _update_entity(job, entity_id, approved=True)
     audit_log.log(job_id, "entity_approved", {"entity_id": entity_id})
+    job_store.update_status(job_id, job.status,
+                            last_entity_action_at=datetime.now(timezone.utc))
     if old_entity:
         ctx_before, ctx_after = _entity_context(job, old_entity)
         learning_store.add_positive(
@@ -452,6 +488,8 @@ def _do_ignore(job_id: str, entity_id: str) -> dict:
     job = _require_job(job_id)
     old_entity = next((Entity.model_validate(e) for e in job.entities if e.id == entity_id), None)
     job = _update_entity(job, entity_id, approved=False, dismissed=True)
+    job_store.update_status(job_id, job.status,
+                            last_entity_action_at=datetime.now(timezone.utc))
     audit_log.log(job_id, "entity_ignored", {"entity_id": entity_id})
     if old_entity:
         learning_store.add_negative(
@@ -489,6 +527,8 @@ def delete_entity(job_id: str, entity_id: str):
     if len(job.entities) == before:
         raise HTTPException(404, f"Entity {entity_id} not found")
     job_store.save(job)
+    job_store.update_status(job_id, job.status,
+                            last_entity_action_at=datetime.now(timezone.utc))
     audit_log.log(job_id, "entity_deleted", {"entity_id": entity_id})
     # Remove from learning store — delete is not negative training
     learning_store.remove(settings.learning_dir, job_id, entity_id)
@@ -640,7 +680,8 @@ def approve_normalized(job_id: str):
     if not job.normalized_md:
         raise HTTPException(400, "No normalized markdown to approve")
 
-    job_store.update_status(job_id, JobStatus.normalized)
+    job_store.update_status(job_id, JobStatus.normalized,
+                            last_ocr_check_approved_at=datetime.now(timezone.utc))
     audit_log.log(job_id, "OCRCHECK_APPROVED", {"path": job.normalized_md})
     return job_store.load(job_id).model_dump()
 

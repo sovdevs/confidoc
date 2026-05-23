@@ -429,9 +429,9 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 .flag-apply { font-size: 10px; color: var(--accent); background: none; border: none;
               cursor: pointer; padding: 0; margin-top: 3px; }
 .flag-apply:hover { text-decoration: underline; }
-.ocr-bar { border-top: 1px solid var(--border); padding: 10px 16px;
-           display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 .token-warning { font-size: 12px; color: var(--danger); display: none; }
+/* Bar separator — visual divider between content-adjacent and commit buttons */
+.bar-sep { width: 1px; height: 18px; background: var(--border); flex-shrink: 0; margin: 0 4px; pointer-events: none; }
 
 /* ── Inline OCR panel (collapsible drawer inside Entities view) ── */
 #ocr-inline-details > summary { list-style: none; }
@@ -1205,14 +1205,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             <div id="flag-list"></div>
           </div>
         </div>
-        <div class="ocr-bar">
-          <button class="btn btn-ghost btn-sm" id="btn-auto-fix" data-tip="Automatically correct unambiguous OCR errors that don't affect pseudonymization tokens">⚡ Auto-fix unambiguous</button>
-          <button class="btn btn-ghost btn-sm" id="btn-save-draft" data-tip="Save your corrections as a draft without approving — you can continue editing later">Save draft</button>
-          <span id="ocr-save-status" style="font-size:12px;color:var(--muted)"></span>
-          <button class="btn btn-ghost btn-sm" id="btn-back-entities" style="margin-left:auto" title="Switch to Entities tab to add/edit PII">← Entities</button>
-          <button class="btn btn-ghost btn-sm" id="btn-reopen-normalized" data-tip="Reopen the OCR Check editor to make further corrections">↩ Reopen</button>
-          <button class="btn btn-primary btn-sm" id="btn-approve-normalized" data-tip="Approve the corrected text — this becomes the final version used in all exports" data-tip-color="red">✓ Approve</button>
-        </div>
+        <!-- OCR Check actions now rendered into #bottom-action-bar by _ocrBarConfig() -->
       </div>
 
       <!-- Mapping pane (Zone 1 — token ↔ original value table) -->
@@ -1241,6 +1234,12 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
       <!-- Policy Engine pane -->
       <!-- Export pane (formerly Policy) -->
       <div id="policy-pane">
+        <!-- Lock banner — shown when export is blocked -->
+        <div id="export-lock-banner" style="display:none;flex-shrink:0;padding:14px 20px;background:rgba(217,119,6,.07);border-bottom:1px solid rgba(217,119,6,.25)">
+          <div style="font-weight:600;color:#d97706;margin-bottom:4px">🔒 <span id="export-lock-title">Export not available</span></div>
+          <div id="export-lock-body" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+          <button class="btn btn-ghost btn-sm" id="export-lock-goto">← Go to Entities</button>
+        </div>
         <div class="pe-layout">
 
           <!-- Left: simplified export form -->
@@ -1475,6 +1474,13 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
       </div>
       <!-- ── Reports pane ──────────────────────────────────────────── -->
       <div id="report-pane" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+
+        <!-- Lock banner — shown when reports step is locked -->
+        <div id="report-lock-banner" style="display:none;flex-shrink:0;padding:14px 20px;background:rgba(100,100,100,.06);border-bottom:1px solid var(--border)">
+          <div style="font-weight:600;color:var(--muted);margin-bottom:4px">🔒 Reports not available yet</div>
+          <div id="report-lock-body" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+          <button class="btn btn-ghost btn-sm" id="report-lock-goto">Go to Export →</button>
+        </div>
 
         <!-- Context bar: title, seed, assets, theme label — no export actions here -->
         <div style="display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;flex-shrink:0;background:var(--surface)">
@@ -1929,6 +1935,7 @@ function setViewMode(mode, j) {
     ocrPane.style.flexDirection = "column";
     loadOcrPane(j);
   } else if (mode === "policy") {
+    _renderLockBanners(_pipelineState);
     policyPane.style.display = "flex";
     policyPane.style.flexDirection = "column";
     llmExportPane.style.display = "block";
@@ -1941,6 +1948,7 @@ function setViewMode(mode, j) {
   } else if (mode === "report") {
     reportPane.style.display = "flex";
     reportPane.style.flexDirection = "column";
+    _renderLockBanners(_pipelineState);
     initReportPane(j);
   } else {
     entityBody.style.display = "flex";
@@ -2021,15 +2029,14 @@ function renderPipelineRail(state) {
   if (!rail || !stepsEl || !state) return;
 
   stepsEl.innerHTML = state.steps.map((step, i) => {
-    const icon    = _STEP_ICON[step.state] || "○";
-    const tip     = step.message || step.label;
+    const icon     = _STEP_ICON[step.state] || "○";
+    const tip      = step.message || step.label;
     const isLocked = step.state === "locked";
-    const badge   = step.id === "entities" && step.counts?.unresolved > 0
-      ? ` <span style="font-size:9px;opacity:.7">${step.counts.unresolved}</span>` : "";
-    const sep     = i > 0 ? '<span class="pipe-sep">›</span>' : "";
+    const sec      = _pipelineStepSecondary(step);
+    const sep      = i > 0 ? '<span class="pipe-sep">›</span>' : "";
     return `${sep}<button class="pipe-step state-${step.state}" data-step="${step.id}"
               data-tip="${escHtml(tip)}" ${isLocked ? "disabled" : ""}>
-              ${icon} ${escHtml(step.label)}${badge}</button>`;
+              ${icon} ${escHtml(step.label)}${sec ? `<span style="opacity:.6;font-weight:400"> · ${escHtml(sec)}</span>` : ""}</button>`;
   }).join("");
 
   stepsEl.querySelectorAll(".pipe-step[data-step]:not([disabled])").forEach(el => {
@@ -2062,6 +2069,27 @@ function renderPipelineRail(state) {
   }
 }
 
+function _pipelineStepSecondary(step) {
+  if (step.state === "locked")  return "";
+  if (step.state === "skipped") return "skipped";
+  if (step.id === "entities") {
+    const n = step.counts?.unresolved;
+    if (n > 0) return `${n} unresolved`;
+    if (step.state === "complete") {
+      const a = step.counts?.approved || 0;
+      return a > 0 ? `${a} approved` : "done";
+    }
+  }
+  if (step.state === "optional")     return "optional";
+  if (step.state === "needs_review") {
+    if (step.id === "reports") return "draft";
+    return step.message || "review";
+  }
+  if (step.state === "complete" && step.id === "export") return "ready";
+  if (step.state === "complete" && step.id === "reports") return "exported";
+  return "";
+}
+
 document.getElementById("next-action-btn")?.addEventListener("click", function() {
   _navigateToStep(this.dataset.targetStep, this.dataset.action);
 });
@@ -2083,13 +2111,14 @@ function renderBottomActionBar(mode, j, state) {
   const btnsEl   = document.getElementById("action-bar-buttons");
   if (!bar) return;
 
-  if (!j || mode === "ocr" || mode === "mapping") {
+  if (!j || mode === "mapping") {
     bar.style.display = "none"; return;
   }
 
   const cfg = mode === "entities" ? _entityBarConfig(j, state)
+            : mode === "ocr"      ? _ocrBarConfig(j, state)
             : mode === "policy"   ? _policyBarConfig(j, state)
-            : mode === "report"   ? _reportBarConfig()
+            : mode === "report"   ? _reportBarConfig(j, state)
             : null;
 
   if (!cfg) { bar.style.display = "none"; return; }
@@ -2097,10 +2126,12 @@ function renderBottomActionBar(mode, j, state) {
   bar.style.display = "flex";
   statusEl.innerHTML  = cfg.status || "";
   btnsEl.innerHTML = (cfg.buttons || []).map(b =>
-    `<button class="btn btn-sm ${escHtml(b.cls || 'btn-ghost')}" id="${escHtml(b.id)}"
-             ${b.tip ? `data-tip="${escHtml(b.tip)}"` : ""}
-             ${b.tc  ? `data-tip-color="${escHtml(b.tc)}"` : ""}>
-       ${escHtml(b.label)}</button>`
+    b.type === "sep"
+      ? `<span class="bar-sep"></span>`
+      : `<button class="btn btn-sm ${escHtml(b.cls || 'btn-ghost')}" id="${escHtml(b.id)}"
+               ${b.tip ? `data-tip="${escHtml(b.tip)}"` : ""}
+               ${b.tc  ? `data-tip-color="${escHtml(b.tc)}"` : ""}>
+         ${escHtml(b.label)}</button>`
   ).join("");
 
   (cfg.buttons || []).forEach(b => {
@@ -2115,13 +2146,23 @@ function renderBottomActionBar(mode, j, state) {
     if (b.id === "bar-report-pdf")            el.addEventListener("click", _exportReportPdf);
     if (b.id === "bar-report-html")           el.addEventListener("click", _exportReportHtml);
     if (b.id === "bar-report-save")           el.addEventListener("click", () => _saveReportPackage(false));
+    if (b.id === "bar-report-skip")           el.addEventListener("click", () => _skipWorkflowStep("reports"));
+    // OCR Check bar
+    if (b.id === "bar-ocr-back")     el.addEventListener("click", _ocrBackToEntities);
+    if (b.id === "bar-ocr-autofix")  el.addEventListener("click", _ocrAutoFix);
+    if (b.id === "bar-ocr-save")     el.addEventListener("click", _ocrSaveDraftBtn);
+    if (b.id === "bar-ocr-approve")  el.addEventListener("click", _ocrApprove);
+    if (b.id === "bar-ocr-reopen")   el.addEventListener("click", _ocrReopen);
+    if (b.id === "bar-ocr-skip")     el.addEventListener("click", () => _skipWorkflowStep("ocr_check"));
   });
 }
 
 function _entityBarConfig(j, state) {
-  const ent      = state?.steps?.find(s => s.id === "entities");
-  const counts   = ent?.counts || {};
+  const ent        = state?.steps?.find(s => s.id === "entities");
+  const counts     = ent?.counts || {};
   const unresolved = counts.unresolved ?? 0;
+  const ts         = state?.timestamps;
+  const lastAction = ts?.last_entity_action_at ? `Last action: ${_fmtHHMM(ts.last_entity_action_at)}` : "";
 
   if (["pending","extracting"].includes(j.status))
     return { status: '<span class="proc-badge"><span class="spinner"></span>OCR in progress…</span>', buttons: [] };
@@ -2131,52 +2172,61 @@ function _entityBarConfig(j, state) {
     return { status: "Run OCR extraction first.", buttons: [] };
   if (ent.state === "needs_review")
     return {
-      status: `<strong>${unresolved}</strong> unresolved ${unresolved === 1 ? "entity" : "entities"} — approve or ignore each one before export.`,
+      status: `<strong>${unresolved}</strong> unresolved ${unresolved === 1 ? "entity" : "entities"} — approve or ignore each one before export.${lastAction ? `  ·  ${lastAction}` : ""}`,
       buttons: [
         { id:"bar-redetect",   label:"↺ Re-detect", cls:"btn-ghost", tip:"Re-run LLM entity detection" },
         { id:"bar-approve-all",label:"Approve All",  cls:"btn-primary", tip:"Approve all and generate pseudonymized export", tc:"red" },
       ],
     };
   return {
-    status: "All entities resolved — export is available.",
+    status: `All entities resolved — export is available.${lastAction ? `  ·  ${lastAction}` : ""}`,
     buttons: [
-      { id:"bar-redetect",   label:"↺ Re-detect",       cls:"btn-ghost", tip:"Re-run entity detection" },
-      { id:"bar-goto-export",label:"Continue to Export →", cls:"btn-primary" },
+      { id:"bar-redetect",   label:"↺ Re-detect",          cls:"btn-ghost", tip:"Re-run entity detection" },
+      { id:"bar-goto-export",label:"Continue to Export →",  cls:"btn-primary" },
     ],
   };
 }
 
 function _policyBarConfig(j, state) {
   const exp = state?.steps?.find(s => s.id === "export");
+  const ts  = state?.timestamps;
   if (!exp) return null;
   if (exp.state === "locked")
     return {
       status: `<span style="color:var(--warning)">Export locked — ${escHtml(exp.message)}</span>`,
       buttons: [{ id:"bar-goto-entities", label:"← Go to Entities", cls:"btn-ghost" }],
     };
+  const lastExp = ts?.last_exported_at ? `Last exported: ${_fmtHHMM(ts.last_exported_at)}` : "";
   if (exp.state === "complete")
     return {
-      status: "Export package created.",
+      status: `Export package created.${lastExp ? `  ·  ${lastExp}` : ""}`,
       buttons: [{ id:"bar-goto-reports", label:"Continue to Reports →", cls:"btn-primary" }],
     };
-  return { status: "Create a privacy-aware export package.", buttons: [] };
+  return {
+    status: lastExp ? lastExp : "Ready — create a privacy-aware export package.",
+    buttons: [],
+  };
 }
 
 let _reportLastExported = null;   // ISO string, set from package endpoint
 
-function _reportBarConfig() {
+function _reportBarConfig(j, state) {
+  const rep = state?.steps?.find(s => s.id === "reports");
+  const isSkipped = rep?.state === "skipped";
   const status = _reportLastExported
-    ? `Last exported: ${fmtTime(_reportLastExported)}`
-    : "Draft — not yet exported.";
-  return {
-    status,
-    buttons: [
-      { id:"bar-report-preview", label:"↻ Preview",   cls:"btn-ghost",   tip:"Render Markdown and update the preview pane" },
-      { id:"bar-report-html",    label:"Export HTML",  cls:"btn-ghost",   tip:"Download as a self-contained HTML file" },
-      { id:"bar-report-pdf",     label:"Export PDF",   cls:"btn-ghost",   tip:"Render and download as PDF" },
-      { id:"bar-report-save",    label:"Save Draft",   cls:"btn-primary", tip:"Save current Markdown to disk (auto-save also runs every 4 s)" },
-    ],
-  };
+    ? `Last exported: ${_fmtHHMM(_reportLastExported)}`
+    : isSkipped ? "Reports skipped." : "Draft — not yet exported.";
+  const buttons = [
+    { id:"bar-report-preview", label:"↻ Preview",      cls:"btn-ghost",   tip:"Render Markdown and update the preview pane" },
+    { id:"bar-report-html",    label:"Export HTML",     cls:"btn-ghost",   tip:"Download as a self-contained HTML file" },
+    { id:"bar-report-pdf",     label:"Export PDF",      cls:"btn-ghost",   tip:"Render and download as PDF" },
+    { id:"bar-report-save",    label:"Save Draft",      cls:"btn-primary", tip:"Save current Markdown to disk (auto-save also runs every 4 s)" },
+  ];
+  if (!isSkipped && !_reportLastExported) {
+    buttons.push({ type:"sep" });
+    buttons.push({ id:"bar-report-skip", label:"Skip Reports", cls:"btn-ghost", tip:"Mark Reports as skipped — can revisit later" });
+  }
+  return { status, buttons };
 }
 
 function renderEntities(j) {
@@ -2893,7 +2943,7 @@ const ocrTextarea  = document.getElementById("ocr-textarea");
 const flagList     = document.getElementById("flag-list");
 const flagCount    = document.getElementById("flag-count");
 const ocrWarning   = document.getElementById("ocr-token-warning");
-const ocrStatus    = document.getElementById("ocr-save-status");
+const ocrStatus    = { textContent: "" };  // ocr-save-status removed; keep ref for saveOcrDraft compat
 let ocrSaveTimer   = null;
 
 const TOKEN_RE = /\[[A-Z][A-Z_]*_\d{3}\]/g;
@@ -3005,44 +3055,7 @@ async function saveOcrDraft() {
   }
 }
 
-document.getElementById("btn-auto-fix").addEventListener("click", async () => {
-  if (!currentJob) return;
-  const res = await api(`/api/jobs/${currentJob.id}/normalize/auto`, {method:"POST"});
-  ocrTextarea.value = (await api(`/api/jobs/${currentJob.id}/normalize`)).markdown;
-  renderFlags(res.flags);
-  showToast(`Auto-fixed ${res.fixes_applied} issues — ${res.remaining_flags} remain`);
-});
-
-document.getElementById("btn-save-draft").addEventListener("click", saveOcrDraft);
-
-document.getElementById("btn-approve-normalized").addEventListener("click", async () => {
-  if (!currentJob) return;
-  if (ocrSourceText && !tokensMatch(ocrSourceText, ocrTextarea.value)) {
-    showToast("Cannot approve — stable tokens were modified", "error"); return;
-  }
-  await saveOcrDraft();
-  try {
-    currentJob = await api(`/api/jobs/${currentJob.id}/normalize/approve`, {method:"POST"});
-    renderDetail();
-    renderJobList();
-    showToast("Normalization approved — ready for export");
-  } catch(e) { showToast(e.message, "error"); }
-});
-
-document.getElementById("btn-back-entities").addEventListener("click", () => {
-  viewMode = "entities";
-  renderDetail();
-});
-
-document.getElementById("btn-reopen-normalized").addEventListener("click", async () => {
-  if (!currentJob) return;
-  try {
-    currentJob = await api(`/api/jobs/${currentJob.id}/normalize/reopen`, {method:"POST"});
-    renderDetail();
-    renderJobList();
-    showToast("OCR Check reopened — continue editing");
-  } catch(e) { showToast(e.message, "error"); }
-});
+// OCR Check actions are now wired via _wireBottomBarHandlers → _ocrAutoFix / _ocrApprove / etc.
 
 // ── Inline OCR panel ──────────────────────────────────────
 const ocrInlineDetails    = document.getElementById("ocr-inline-details");
@@ -5276,6 +5289,163 @@ function _updateReportStatusBar(msg) {
 // ── Report pane event listeners (top context bar only — export/save in bottom bar) ─
 document.getElementById("report-seed-btn")?.addEventListener("click",   _seedReportFromLLM);
 document.getElementById("report-insert-btn")?.addEventListener("click", _insertDirective);
+
+// ── OCR Check named action functions (wired via _wireBottomBarHandlers) ────────────
+async function _ocrAutoFix() {
+  if (!currentJob) return;
+  try {
+    const res = await api(`/api/jobs/${currentJob.id}/normalize/auto`, {method:"POST"});
+    ocrTextarea.value = (await api(`/api/jobs/${currentJob.id}/normalize`)).markdown;
+    renderFlags(res.flags);
+    showToast(`Auto-fixed ${res.fixes_applied} issue${res.fixes_applied !== 1 ? "s" : ""} — ${res.remaining_flags} remain`);
+  } catch(e) { showToast(e.message || "Auto-fix failed", "error"); }
+}
+
+async function _ocrSaveDraftBtn() {
+  await saveOcrDraft();
+}
+
+async function _ocrApprove() {
+  if (!currentJob) return;
+  if (ocrSourceText && !tokensMatch(ocrSourceText, ocrTextarea.value)) {
+    showToast("Cannot approve — stable tokens were modified", "error"); return;
+  }
+  await saveOcrDraft();
+  try {
+    currentJob = await api(`/api/jobs/${currentJob.id}/normalize/approve`, {method:"POST"});
+    renderDetail();
+    renderJobList();
+    showToast("OCR Check approved — ready for export");
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+function _ocrBackToEntities() {
+  viewMode = "entities";
+  renderDetail();
+}
+
+async function _ocrReopen() {
+  if (!currentJob) return;
+  try {
+    currentJob = await api(`/api/jobs/${currentJob.id}/normalize/reopen`, {method:"POST"});
+    renderDetail();
+    renderJobList();
+    showToast("OCR Check reopened — continue editing");
+  } catch(e) { showToast(e.message, "error"); }
+}
+
+// ── Skip mechanism ─────────────────────────────────────────────────────────────────
+async function _skipWorkflowStep(step) {
+  if (!currentJob) return;
+  try {
+    await api(`/api/jobs/${currentJob.id}/workflow-state`, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({[step]: "skipped"}),
+    });
+    _pipelineState = null;
+    await _fetchAndRenderPipeline(currentJob.id);
+    showToast(`${step === "ocr_check" ? "OCR Check" : "Reports"} skipped`);
+  } catch(e) { showToast(e.message || "Skip failed", "error"); }
+}
+
+// ── Timestamp helpers ─────────────────────────────────────────────────────────────
+function _fmtHHMM(isoStr) {
+  if (!isoStr) return null;
+  return new Date(isoStr).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+}
+
+// ── Lock banners ──────────────────────────────────────────────────────────────────
+function _renderLockBanners(state) {
+  if (!state) return;
+  const m = Object.fromEntries((state.steps || []).map(s => [s.id, s]));
+
+  // Export lock banner
+  const expBanner = document.getElementById("export-lock-banner");
+  if (expBanner) {
+    const exp = m["export"];
+    if (exp?.state === "locked") {
+      expBanner.style.display = "block";
+      document.getElementById("export-lock-title").textContent = "Export not available";
+      const ent = m["entities"];
+      const n   = ent?.counts?.unresolved || 0;
+      document.getElementById("export-lock-body").textContent =
+        n > 0 ? `${n} entit${n === 1 ? "y needs" : "ies need"} review before export.`
+               : exp.message || "Complete required steps first.";
+      document.getElementById("export-lock-goto")?.addEventListener("click", () => {
+        viewMode = "entities"; renderDetail();
+      }, {once: true});
+    } else {
+      expBanner.style.display = "none";
+    }
+  }
+
+  // Reports lock banner
+  const repBanner = document.getElementById("report-lock-banner");
+  if (repBanner) {
+    const rep = m["reports"];
+    if (rep?.state === "locked") {
+      repBanner.style.display = "block";
+      document.getElementById("report-lock-body").textContent =
+        "A report needs Markdown input. Run OCR extraction first, then create an export package or seed the report from LLM output.";
+      document.getElementById("report-lock-goto")?.addEventListener("click", () => {
+        viewMode = "policy"; renderDetail();
+      }, {once: true});
+    } else {
+      repBanner.style.display = "none";
+    }
+  }
+}
+
+// Also call when pipeline state arrives
+const _origFetchAndRender = _fetchAndRenderPipeline;
+// Patch to also update lock banners on every state refresh
+async function _fetchAndRenderPipeline(jobId) {
+  try {
+    const state = await api(`/api/jobs/${jobId}/pipeline-state`);
+    _pipelineState = state;
+    renderPipelineRail(state);
+    renderBottomActionBar(viewMode, currentJob, state);
+    _renderLockBanners(state);
+  } catch(_) {}
+}
+
+// ── OCR Check bottom bar config ────────────────────────────────────────────────────
+function _ocrBarConfig(j, state) {
+  const occ = state?.steps?.find(s => s.id === "ocr_check");
+  const ts  = state?.timestamps;
+
+  const isComplete = occ?.state === "complete" || j?.status === "normalized" || j?.status === "done";
+  const isSkipped  = occ?.state === "skipped";
+  const canSkip    = occ?.state === "optional" || occ?.state === "in_progress";
+
+  let status = "";
+  if (ts?.last_ocr_check_approved_at) {
+    status = `Approved: ${_fmtHHMM(ts.last_ocr_check_approved_at)}`;
+  } else if (isSkipped) {
+    status = "OCR Check skipped.";
+  } else {
+    status = "Optional — recommended before export to catch OCR artefacts.";
+  }
+
+  const buttons = [];
+  buttons.push({ id:"bar-ocr-back", label:"← Entities", cls:"btn-ghost", tip:"Return to entity review" });
+
+  if (!isComplete && !isSkipped) {
+    buttons.push({ type:"sep" });
+    buttons.push({ id:"bar-ocr-autofix", label:"⚡ Auto-fix", cls:"btn-ghost", tip:"Automatically correct unambiguous OCR errors" });
+    buttons.push({ id:"bar-ocr-save",    label:"Save Draft",  cls:"btn-ghost", tip:"Save corrections without approving" });
+    buttons.push({ type:"sep" });
+    if (canSkip) {
+      buttons.push({ id:"bar-ocr-skip", label:"Skip OCR Check", cls:"btn-ghost", tip:"Skip this step — will be noted in the audit log" });
+    }
+    buttons.push({ id:"bar-ocr-approve", label:"✓ Approve OCR Check", cls:"btn-primary", tip:"Approve corrected text — becomes final for all exports", tc:"red" });
+  } else if (isComplete) {
+    buttons.push({ type:"sep" });
+    buttons.push({ id:"bar-ocr-reopen", label:"↩ Reopen", cls:"btn-ghost", tip:"Reopen OCR check to make further corrections" });
+  }
+  return { status, buttons };
+}
 
 document.getElementById("report-asset-type")?.addEventListener("change",     _updateReportAssetPicker);
 

@@ -79,6 +79,10 @@ class Job(BaseModel):
     # Keys: "ocr_check", "reports" — values: "pending" | "complete" | "skipped"
     workflow_state: dict = {}
 
+    # Precise activity timestamps — not proxied from updated_at
+    last_entity_action_at:      Optional[datetime] = None
+    last_ocr_check_approved_at: Optional[datetime] = None
+
 
 def _path(job_id: str) -> Path:
     return settings.jobs_dir / f"{job_id}.json"
