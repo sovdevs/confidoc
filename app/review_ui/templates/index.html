@@ -1476,35 +1476,31 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
       <!-- ── Reports pane ──────────────────────────────────────────── -->
       <div id="report-pane" style="display:none;flex:1;flex-direction:column;overflow:hidden">
 
-        <!-- Toolbar -->
-        <div style="display:flex;gap:6px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;flex-shrink:0;background:var(--surface)">
+        <!-- Context bar: title, seed, assets, theme label — no export actions here -->
+        <div style="display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;flex-shrink:0;background:var(--surface)">
           <input id="report-title-input" placeholder="Report title…"
-                 style="flex:1;min-width:160px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;outline:none"
+                 style="flex:1;min-width:150px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px;outline:none"
                  data-tip="Title shown in the report header and PDF filename"/>
           <input id="report-subtitle-input" placeholder="Subtitle / period…"
-                 style="flex:1;min-width:120px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;outline:none"/>
+                 style="flex:1;min-width:110px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px;outline:none"/>
           <button class="btn btn-ghost btn-sm" id="report-seed-btn"
                   data-tip="Pre-fill the editor with the latest LLM export text from the Export tab">↓ Seed from LLM</button>
-          <span style="width:1px;height:20px;background:var(--border);flex-shrink:0"></span>
-          <!-- Asset picker -->
-          <select id="report-asset-type" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 8px;font-size:11px">
+          <span style="width:1px;height:18px;background:var(--border);flex-shrink:0"></span>
+          <select id="report-asset-type" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:5px 8px;font-size:11px">
             <option value="image">Image</option>
             <option value="chart">Chart</option>
             <option value="screenshot">Screenshot</option>
             <option value="table">Table</option>
           </select>
-          <select id="report-asset-pick" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 8px;font-size:11px;max-width:160px">
+          <select id="report-asset-pick" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:5px 8px;font-size:11px;max-width:150px">
             <option value="">— pick asset —</option>
           </select>
           <button class="btn btn-ghost btn-sm" id="report-insert-btn"
                   data-tip="Insert the selected asset directive at the cursor position in the editor">Insert</button>
-          <span style="width:1px;height:20px;background:var(--border);flex-shrink:0"></span>
-          <button class="btn btn-ghost btn-sm" id="report-preview-btn"
-                  data-tip="Render the Markdown to HTML and update the preview pane">↻ Preview</button>
-          <button class="btn btn-ghost btn-sm" id="report-export-html-btn"
-                  data-tip="Download the report as a self-contained HTML file">HTML</button>
-          <button class="btn btn-primary btn-sm" id="report-export-pdf-btn"
-                  data-tip="Render and download as PDF — requires WeasyPrint on server">PDF</button>
+          <span style="width:1px;height:18px;background:var(--border);flex-shrink:0"></span>
+          <!-- Theme label (static for now) + last exported -->
+          <span id="report-theme-label" style="font-size:11px;color:var(--muted)" data-tip="Edit theme.json in the job's report folder to customise colours, font, and logo">Current theme: default</span>
+          <span id="report-last-exported" style="font-size:11px;color:var(--muted)"></span>
         </div>
 
         <!-- Split: editor left, preview right -->
@@ -1513,7 +1509,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           <!-- Markdown editor -->
           <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border);min-width:0">
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:5px 12px;background:var(--surface);flex-shrink:0;border-bottom:1px solid var(--border)">
-              Markdown · <span id="report-editor-hint" style="opacity:.6">directives: &#123;&#123; image:path | caption="…" &#125;&#125;</span>
+              Markdown · <span style="opacity:.6">directives: &#123;&#123; image:path | caption="…" &#125;&#125;</span>
             </div>
             <textarea id="report-editor"
                       spellcheck="false"
@@ -1531,11 +1527,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           </div>
 
         </div>
-
-        <!-- Status bar -->
-        <div id="report-status-bar" style="font-size:11px;color:var(--muted);padding:5px 14px;border-top:1px solid var(--border);flex-shrink:0;background:var(--surface)">
-          Reports tab — open a job and edit or generate Markdown above
-        </div>
+        <!-- Export/save actions live in the shared bottom action bar — not here -->
       </div><!-- /#report-pane -->
 
       <!-- Persistent bottom action bar — content injected per active tab -->
@@ -2119,8 +2111,10 @@ function renderBottomActionBar(mode, j, state) {
     if (b.id === "bar-goto-export")           el.addEventListener("click", () => { viewMode="policy"; renderDetail(); });
     if (b.id === "bar-goto-entities")         el.addEventListener("click", () => { viewMode="entities"; renderDetail(); });
     if (b.id === "bar-goto-reports")          el.addEventListener("click", () => { viewMode="report"; renderDetail(); });
+    if (b.id === "bar-report-preview")        el.addEventListener("click", _renderReportPreview);
     if (b.id === "bar-report-pdf")            el.addEventListener("click", _exportReportPdf);
     if (b.id === "bar-report-html")           el.addEventListener("click", _exportReportHtml);
+    if (b.id === "bar-report-save")           el.addEventListener("click", () => _saveReportPackage(false));
   });
 }
 
@@ -2168,12 +2162,19 @@ function _policyBarConfig(j, state) {
   return { status: "Create a privacy-aware export package.", buttons: [] };
 }
 
+let _reportLastExported = null;   // ISO string, set from package endpoint
+
 function _reportBarConfig() {
+  const status = _reportLastExported
+    ? `Last exported: ${fmtTime(_reportLastExported)}`
+    : "Draft — not yet exported.";
   return {
-    status: "Edit the Markdown and preview before exporting.",
+    status,
     buttons: [
-      { id:"bar-report-html", label:"Export HTML", cls:"btn-ghost" },
-      { id:"bar-report-pdf",  label:"Export PDF",  cls:"btn-primary" },
+      { id:"bar-report-preview", label:"↻ Preview",   cls:"btn-ghost",   tip:"Render Markdown and update the preview pane" },
+      { id:"bar-report-html",    label:"Export HTML",  cls:"btn-ghost",   tip:"Download as a self-contained HTML file" },
+      { id:"bar-report-pdf",     label:"Export PDF",   cls:"btn-ghost",   tip:"Render and download as PDF" },
+      { id:"bar-report-save",    label:"Save Draft",   cls:"btn-primary", tip:"Save current Markdown to disk (auto-save also runs every 4 s)" },
     ],
   };
 }
@@ -2218,7 +2219,7 @@ function renderEntities(j) {
         <button class="btn btn-success btn-sm" data-action="approve" data-id="${e.id}" data-tip="Confirm this entity is PII — it will be pseudonymized in the export and remembered for Re-Detect">✓ Approve</button>
         <button class="btn btn-danger  btn-sm" data-action="ignore"  data-id="${e.id}" data-tip="Not PII — suppress this suggestion in future Re-Detect runs for this document">✗ Ignore</button>
         <button class="btn btn-ghost   btn-sm" data-action="edit"    data-id="${e.id}" style="margin-left:auto" data-tip="Edit the replacement token for this entity">Edit</button>
-        <button class="btn btn-ghost   btn-sm" data-action="delete"  data-id="${e.id}" style="color:var(--danger);padding:4px 7px" data-tip="Remove annotation entirely so the span can be re-drawn — does not affect learning">🗑</button>
+        <button class="btn btn-ghost   btn-sm" data-action="delete"  data-id="${e.id}" style="color:var(--danger);padding:4px 7px" data-tip="Remove annotation for redraw only — does not teach the system this text is wrong. Use Ignore to suppress future suggestions.">🗑</button>
       </div>
       <div class="entity-edit-row" id="edit-${e.id}">
         <input type="text" placeholder="${escHtml(e.replacement)}" value="${escHtml(e.replacement)}">
@@ -5090,11 +5091,21 @@ async function initReportPane(j) {
     document.getElementById("report-editor").value         = pkg.markdown || "";
     document.getElementById("report-title-input").value    = pkg.meta?.title    || j.filename?.replace(/\.pdf$/i,"") || "";
     document.getElementById("report-subtitle-input").value = pkg.meta?.subtitle || "";
+
+    // Theme label (static for now)
+    const themeEl = document.getElementById("report-theme-label");
+    if (themeEl) themeEl.textContent = `Current theme: ${pkg.theme_name || "default"}`;
+
+    // Last exported timestamp
+    _reportLastExported = pkg.last_exported_at || null;
+    const expEl = document.getElementById("report-last-exported");
+    if (expEl) expEl.textContent = _reportLastExported ? `· Last exported: ${fmtTime(_reportLastExported)}` : "";
   } catch(_) {}
 
   await _loadReportAssets(j.id);
   _updateReportAssetPicker();
-  _updateReportStatusBar("Loaded · edit Markdown and click Preview to render");
+  // Re-render the bottom bar so it shows fresh last-exported state
+  renderBottomActionBar("report", j, _pipelineState);
 }
 
 async function _loadReportAssets(jobId) {
@@ -5152,7 +5163,7 @@ async function _saveReportPackage(quiet = false) {
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ markdown, meta: { title, subtitle } }),
     });
-    if (!quiet) _updateReportStatusBar("Saved ✓");
+    if (!quiet) showToast("Draft saved ✓");
   } catch(e) {
     if (!quiet) showToast("Save failed: " + (e.message || e), "error");
   }
@@ -5201,10 +5212,11 @@ async function _exportReportPdf() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    _updateReportStatusBar("PDF downloaded ✓");
+    _reportLastExported = new Date().toISOString();
+    renderBottomActionBar("report", currentJob, _pipelineState);
+    showToast("PDF downloaded ✓");
   } catch(e) {
     showToast("PDF error: " + (e.message || e), "error");
-    _updateReportStatusBar("PDF export failed");
   }
 }
 
@@ -5223,7 +5235,9 @@ async function _exportReportHtml() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    _updateReportStatusBar("HTML downloaded ✓");
+    _reportLastExported = new Date().toISOString();
+    renderBottomActionBar("report", currentJob, _pipelineState);
+    showToast("HTML downloaded ✓");
   } catch(e) {
     showToast("HTML error: " + (e.message || e), "error");
   }
@@ -5254,16 +5268,14 @@ async function _seedReportFromLLM() {
 }
 
 function _updateReportStatusBar(msg) {
-  const el = document.getElementById("report-status-bar");
-  if (el) el.textContent = msg;
+  // Status messages now go to the bottom action bar or as toasts.
+  // This stub is kept in case any path still calls it.
+  if (msg) showToast(msg);
 }
 
-// ── Report pane event listeners ────────────────────────────────────────────
-document.getElementById("report-preview-btn")?.addEventListener("click",     _renderReportPreview);
-document.getElementById("report-export-pdf-btn")?.addEventListener("click",  _exportReportPdf);
-document.getElementById("report-export-html-btn")?.addEventListener("click", _exportReportHtml);
-document.getElementById("report-seed-btn")?.addEventListener("click",        _seedReportFromLLM);
-document.getElementById("report-insert-btn")?.addEventListener("click",      _insertDirective);
+// ── Report pane event listeners (top context bar only — export/save in bottom bar) ─
+document.getElementById("report-seed-btn")?.addEventListener("click",   _seedReportFromLLM);
+document.getElementById("report-insert-btn")?.addEventListener("click", _insertDirective);
 
 document.getElementById("report-asset-type")?.addEventListener("change",     _updateReportAssetPicker);
 

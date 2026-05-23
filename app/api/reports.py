@@ -5,6 +5,7 @@ This file is allowed to import Confidoc internals. report_engine/ must not.
 from __future__ import annotations
 import json
 import mimetypes
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
@@ -74,7 +75,34 @@ def get_package(job_id: str):
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return {"markdown": markdown, "meta": meta}
+
+    # Theme name (static label for now — predefined themes come later)
+    theme_path = report_dir / "theme.json"
+    theme_name = "default"
+    if theme_path.exists():
+        try:
+            t = json.loads(theme_path.read_text(encoding="utf-8"))
+            theme_name = t.get("name", "default")
+        except Exception:
+            pass
+
+    # Last exported timestamp
+    exp_dir = report_dir / "exports"
+    last_exported_at: str | None = None
+    if exp_dir.exists():
+        files = [f for f in exp_dir.iterdir() if f.is_file()]
+        if files:
+            latest = max(files, key=lambda f: f.stat().st_mtime)
+            last_exported_at = datetime.fromtimestamp(
+                latest.stat().st_mtime, tz=timezone.utc
+            ).isoformat()
+
+    return {
+        "markdown":        markdown,
+        "meta":            meta,
+        "theme_name":      theme_name,
+        "last_exported_at": last_exported_at,
+    }
 
 
 class _SaveBody(BaseModel):
