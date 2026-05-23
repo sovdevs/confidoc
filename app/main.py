@@ -127,6 +127,9 @@ app.include_router(server_sources_router)
 from app.api.gateway import router as gateway_router
 app.include_router(gateway_router)
 
+from app.api.reports import router as reports_router
+app.include_router(reports_router)
+
 from app.api.gateway_sftp import router as gateway_sftp_router
 app.include_router(gateway_sftp_router)
 

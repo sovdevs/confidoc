@@ -1405,6 +1405,71 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
 
         </div>
       </div>
+      <!-- ── Reports pane ──────────────────────────────────────────── -->
+      <div id="report-pane" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+
+        <!-- Toolbar -->
+        <div style="display:flex;gap:6px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center;flex-shrink:0;background:var(--surface)">
+          <input id="report-title-input" placeholder="Report title…"
+                 style="flex:1;min-width:160px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;outline:none"
+                 data-tip="Title shown in the report header and PDF filename"/>
+          <input id="report-subtitle-input" placeholder="Subtitle / period…"
+                 style="flex:1;min-width:120px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;outline:none"/>
+          <button class="btn btn-ghost btn-sm" id="report-seed-btn"
+                  data-tip="Pre-fill the editor with the latest LLM export text from the Export tab">↓ Seed from LLM</button>
+          <span style="width:1px;height:20px;background:var(--border);flex-shrink:0"></span>
+          <!-- Asset picker -->
+          <select id="report-asset-type" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 8px;font-size:11px">
+            <option value="image">Image</option>
+            <option value="chart">Chart</option>
+            <option value="screenshot">Screenshot</option>
+            <option value="table">Table</option>
+          </select>
+          <select id="report-asset-pick" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 8px;font-size:11px;max-width:160px">
+            <option value="">— pick asset —</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="report-insert-btn"
+                  data-tip="Insert the selected asset directive at the cursor position in the editor">Insert</button>
+          <span style="width:1px;height:20px;background:var(--border);flex-shrink:0"></span>
+          <button class="btn btn-ghost btn-sm" id="report-preview-btn"
+                  data-tip="Render the Markdown to HTML and update the preview pane">↻ Preview</button>
+          <button class="btn btn-ghost btn-sm" id="report-export-html-btn"
+                  data-tip="Download the report as a self-contained HTML file">HTML</button>
+          <button class="btn btn-primary btn-sm" id="report-export-pdf-btn"
+                  data-tip="Render and download as PDF — requires WeasyPrint on server">PDF</button>
+        </div>
+
+        <!-- Split: editor left, preview right -->
+        <div style="display:flex;flex:1;overflow:hidden">
+
+          <!-- Markdown editor -->
+          <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border);min-width:0">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:5px 12px;background:var(--surface);flex-shrink:0;border-bottom:1px solid var(--border)">
+              Markdown · <span id="report-editor-hint" style="opacity:.6">directives: &#123;&#123; image:path | caption="…" &#125;&#125;</span>
+            </div>
+            <textarea id="report-editor"
+                      spellcheck="false"
+                      style="flex:1;resize:none;background:var(--bg);color:var(--text);border:none;outline:none;padding:16px;font-family:'Courier New',monospace;font-size:12px;line-height:1.6;tab-size:2"></textarea>
+          </div>
+
+          <!-- HTML preview (iframe) -->
+          <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:5px 12px;background:var(--surface);flex-shrink:0;border-bottom:1px solid var(--border)">
+              Preview <span id="report-preview-status" style="opacity:.6"></span>
+            </div>
+            <iframe id="report-preview-frame"
+                    style="flex:1;border:none;background:#fff"
+                    sandbox="allow-same-origin"></iframe>
+          </div>
+
+        </div>
+
+        <!-- Status bar -->
+        <div id="report-status-bar" style="font-size:11px;color:var(--muted);padding:5px 14px;border-top:1px solid var(--border);flex-shrink:0;background:var(--surface)">
+          Reports tab — open a job and edit or generate Markdown above
+        </div>
+      </div><!-- /#report-pane -->
+
       </div><!-- /#content-col -->
 
       <!-- PDF side panel — flex sibling of content-col, visible across all tabs -->
@@ -1760,6 +1825,7 @@ function renderViewTabs(j) {
   if (canNormalize) html += `<button class="view-tab ${viewMode==="ocr"?"active":""}" data-view="ocr" data-tip="Optional — correct OCR artefacts in the extracted text before it reaches the export">OCR Check <span style="font-size:9px;font-weight:400;opacity:.5">(optional)</span></button>`;
   if (canMapping)   html += `<button class="view-tab ${viewMode==="mapping"?"active":""}" data-view="mapping" data-tip="Zone 1 only — view the token mapping between pseudonymized placeholders and original values" data-tip-color="red">🔑 Mapping</button>`;
   if (canPolicy)    html += `<button class="view-tab ${viewMode==="policy"?"active":""}" data-view="policy" data-tip="Generate a policy-compliant export package or send to an LLM — no PHI included" data-tip-color="purple">Export</button>`;
+  if (canPolicy)    html += `<button class="view-tab ${viewMode==="report"?"active":""}" data-view="report" data-tip="Build a polished Markdown report with assets, KPI cards, callouts, and PDF export">Report</button>`;
   tabs.innerHTML = html;
   tabs.querySelectorAll(".view-tab").forEach(btn =>
     btn.addEventListener("click", () => { viewMode = btn.dataset.view; renderDetail(); })
@@ -1767,10 +1833,11 @@ function renderViewTabs(j) {
 }
 
 function setViewMode(mode, j) {
-  const entityBody   = document.querySelector(".detail-body");
-  const ocrPane      = document.getElementById("ocr-pane");
-  const policyPane   = document.getElementById("policy-pane");
-  const mappingPane  = document.getElementById("mapping-pane");
+  const entityBody    = document.querySelector(".detail-body");
+  const ocrPane       = document.getElementById("ocr-pane");
+  const policyPane    = document.getElementById("policy-pane");
+  const mappingPane   = document.getElementById("mapping-pane");
+  const reportPane    = document.getElementById("report-pane");
   const inlineWrap    = document.getElementById("ocr-inline-wrap");
   const llmExportPane = document.getElementById("llm-export-pane");
 
@@ -1778,6 +1845,7 @@ function setViewMode(mode, j) {
   ocrPane.style.display       = "none";
   policyPane.style.display    = "none";
   mappingPane.style.display   = "none";
+  reportPane.style.display    = "none";
   inlineWrap.style.display    = "none";
   llmExportPane.style.display = "none";
 
@@ -1795,6 +1863,10 @@ function setViewMode(mode, j) {
     mappingPane.style.display = "flex";
     mappingPane.style.flexDirection = "column";
     loadMappingPane(j);
+  } else if (mode === "report") {
+    reportPane.style.display = "flex";
+    reportPane.style.flexDirection = "column";
+    initReportPane(j);
   } else {
     entityBody.style.display = "flex";
     if (j && (j.reviewed_md || j.normalized_md)) {
@@ -4763,6 +4835,201 @@ document.getElementById("demo-stop-btn")?.addEventListener("click", async () => 
   document.addEventListener("click",  hide);
   document.addEventListener("scroll", hide, true);
 })();
+
+// ── Report pane ────────────────────────────────────────────────────────────
+let _reportJobId      = null;   // job currently loaded in the report pane
+let _reportAssets     = {};     // { images: [...], charts: [...], ... }
+let _reportAutoSave   = null;   // debounce timer
+
+async function initReportPane(j) {
+  if (!j) return;
+  _reportJobId = j.id;
+
+  // Load saved report package
+  try {
+    const pkg = await api(`/api/jobs/${j.id}/report/package`);
+    document.getElementById("report-editor").value         = pkg.markdown || "";
+    document.getElementById("report-title-input").value    = pkg.meta?.title    || j.filename?.replace(/\.pdf$/i,"") || "";
+    document.getElementById("report-subtitle-input").value = pkg.meta?.subtitle || "";
+  } catch(_) {}
+
+  await _loadReportAssets(j.id);
+  _updateReportAssetPicker();
+  _updateReportStatusBar("Loaded · edit Markdown and click Preview to render");
+}
+
+async function _loadReportAssets(jobId) {
+  try {
+    _reportAssets = await api(`/api/jobs/${jobId}/report/assets`);
+  } catch(_) {
+    _reportAssets = {};
+  }
+}
+
+function _updateReportAssetPicker() {
+  const type = document.getElementById("report-asset-type")?.value || "image";
+  const key  = type === "image" ? "images" : type === "table" ? "tables"
+             : type === "chart" ? "charts" : "screenshots";
+  const items = (_reportAssets[key] || []);
+  const pick  = document.getElementById("report-asset-pick");
+  if (!pick) return;
+  pick.innerHTML = items.length
+    ? '<option value="">— pick asset —</option>' + items.map(a =>
+        `<option value="${escHtml(a.path)}">${escHtml(a.caption || a.id)}</option>`
+      ).join("")
+    : '<option value="">No assets found — upload files to assets/ folder</option>';
+}
+
+function _insertDirective() {
+  const type     = document.getElementById("report-asset-type")?.value || "image";
+  const path     = document.getElementById("report-asset-pick")?.value || "";
+  const editor   = document.getElementById("report-editor");
+  if (!editor) return;
+  if (!path) { showToast("Select an asset first", "error"); return; }
+
+  const caption  = path.split('/').pop().replace(/\.[^.]+$/,'').replace(/[_-]/g,' ');
+  let directive;
+  if (type === "table")      directive = `{{ table:${path} | title="${caption}" }}`;
+  else if (type === "chart") directive = `{{ chart:${path} | caption="${caption}" }}`;
+  else                       directive = `{{ image:${path} | caption="${caption}" }}`;
+
+  // Insert at cursor
+  const start = editor.selectionStart;
+  const end   = editor.selectionEnd;
+  const text  = editor.value;
+  editor.value = text.slice(0, start) + "\n" + directive + "\n" + text.slice(end);
+  editor.selectionStart = editor.selectionEnd = start + directive.length + 2;
+  editor.focus();
+}
+
+async function _saveReportPackage(quiet = false) {
+  if (!_reportJobId) return;
+  const markdown  = document.getElementById("report-editor")?.value    || "";
+  const title     = document.getElementById("report-title-input")?.value.trim()    || "";
+  const subtitle  = document.getElementById("report-subtitle-input")?.value.trim() || "";
+  try {
+    await api(`/api/jobs/${_reportJobId}/report/package`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ markdown, meta: { title, subtitle } }),
+    });
+    if (!quiet) _updateReportStatusBar("Saved ✓");
+  } catch(e) {
+    if (!quiet) showToast("Save failed: " + (e.message || e), "error");
+  }
+}
+
+function _scheduleAutoSave() {
+  clearTimeout(_reportAutoSave);
+  _reportAutoSave = setTimeout(() => _saveReportPackage(true), 4000);
+}
+
+async function _renderReportPreview() {
+  if (!_reportJobId) return;
+  await _saveReportPackage(true);
+  const statusEl = document.getElementById("report-preview-status");
+  if (statusEl) statusEl.textContent = "rendering…";
+  try {
+    const res = await fetch(`/api/jobs/${_reportJobId}/report/preview`, {method: "POST"});
+    if (!res.ok) throw new Error(await res.text());
+    const html = await res.text();
+    const frame = document.getElementById("report-preview-frame");
+    if (frame) { frame.srcdoc = html; }
+    if (statusEl) statusEl.textContent = "· updated";
+    _updateReportStatusBar("Preview rendered");
+  } catch(e) {
+    if (statusEl) statusEl.textContent = "· error";
+    showToast("Preview error: " + (e.message || e), "error");
+  }
+}
+
+async function _exportReportPdf() {
+  if (!_reportJobId) return;
+  await _saveReportPackage(true);
+  _updateReportStatusBar("Generating PDF…");
+  try {
+    const res  = await fetch(`/api/jobs/${_reportJobId}/report/export/pdf`, {method: "POST"});
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.detail || "PDF export failed");
+    }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `report_${_reportJobId.slice(0,8)}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    _updateReportStatusBar("PDF downloaded ✓");
+  } catch(e) {
+    showToast("PDF error: " + (e.message || e), "error");
+    _updateReportStatusBar("PDF export failed");
+  }
+}
+
+async function _exportReportHtml() {
+  if (!_reportJobId) return;
+  await _saveReportPackage(true);
+  try {
+    const res  = await fetch(`/api/jobs/${_reportJobId}/report/export/html`, {method: "POST"});
+    if (!res.ok) throw new Error("HTML export failed");
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `report_${_reportJobId.slice(0,8)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    _updateReportStatusBar("HTML downloaded ✓");
+  } catch(e) {
+    showToast("HTML error: " + (e.message || e), "error");
+  }
+}
+
+async function _seedReportFromLLM() {
+  if (!_reportJobId) return;
+  // Use the most recent LLM run text displayed in the Export tab
+  const llmText = document.getElementById("llm-result-text")?.textContent?.trim();
+  if (llmText) {
+    document.getElementById("report-editor").value = llmText;
+    _updateReportStatusBar("Seeded from LLM output — edit and preview when ready");
+    return;
+  }
+  // Fallback: try loading the anonymized markdown
+  try {
+    const res = await api(`/api/jobs/${_reportJobId}`);
+    if (res.anonymized_md) {
+      const r2 = await fetch(`/${res.anonymized_md}`);
+      if (r2.ok) {
+        document.getElementById("report-editor").value = await r2.text();
+        _updateReportStatusBar("Seeded from anonymized Markdown");
+        return;
+      }
+    }
+  } catch(_) {}
+  showToast("No LLM output found — run a report from the Export tab first", "error");
+}
+
+function _updateReportStatusBar(msg) {
+  const el = document.getElementById("report-status-bar");
+  if (el) el.textContent = msg;
+}
+
+// ── Report pane event listeners ────────────────────────────────────────────
+document.getElementById("report-preview-btn")?.addEventListener("click",     _renderReportPreview);
+document.getElementById("report-export-pdf-btn")?.addEventListener("click",  _exportReportPdf);
+document.getElementById("report-export-html-btn")?.addEventListener("click", _exportReportHtml);
+document.getElementById("report-seed-btn")?.addEventListener("click",        _seedReportFromLLM);
+document.getElementById("report-insert-btn")?.addEventListener("click",      _insertDirective);
+
+document.getElementById("report-asset-type")?.addEventListener("change",     _updateReportAssetPicker);
+
+document.getElementById("report-editor")?.addEventListener("input", _scheduleAutoSave);
+
 </script>
 </body>
 </html>
