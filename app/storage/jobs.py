@@ -75,6 +75,10 @@ class Job(BaseModel):
     reviewed_at: Optional[datetime] = None
     error: Optional[str] = None
 
+    # Lightweight per-job workflow state for optional/skippable steps.
+    # Keys: "ocr_check", "reports" — values: "pending" | "complete" | "skipped"
+    workflow_state: dict = {}
+
 
 def _path(job_id: str) -> Path:
     return settings.jobs_dir / f"{job_id}.json"

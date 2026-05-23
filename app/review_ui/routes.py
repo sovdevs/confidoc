@@ -49,6 +49,152 @@ def get_job(job_id: str):
     return job.model_dump()
 
 
+@router.get("/api/jobs/{job_id}/pipeline-state")
+def get_pipeline_state(job_id: str):
+    """Compute and return the current pipeline step states for a job."""
+    job = _require_job(job_id)
+    return _compute_pipeline_state(job)
+
+
+def _compute_pipeline_state(job: Job) -> dict:
+    ws       = job.workflow_state or {}
+    entities = [Entity.model_validate(e) if isinstance(e, dict) else e for e in job.entities]
+
+    approved   = sum(1 for e in entities if e.approved)
+    dismissed  = sum(1 for e in entities if e.dismissed)
+    unresolved = sum(1 for e in entities if not e.approved and not e.dismissed)
+    has_ocr    = bool(job.extracted_md)
+
+    # Has a prepared export package been created?
+    pkg_dir    = settings.prepared_packages_dir / job.id
+    has_export = pkg_dir.exists() and any(pkg_dir.iterdir()) or job.status == JobStatus.done
+
+    # Has a report been exported?
+    rep_exports = settings.reports_dir / job.id / "exports"
+    report_md   = settings.reports_dir / job.id / "report.md"
+    report_exported = rep_exports.exists() and any(rep_exports.iterdir())
+    report_draft    = report_md.exists()
+
+    steps = []
+
+    # ── Input ─────────────────────────────────────────────────────────────────
+    steps.append({
+        "id": "input", "label": "Input", "state": "complete",
+        "required": True, "message": job.filename,
+    })
+
+    # ── OCR ───────────────────────────────────────────────────────────────────
+    if job.status in (JobStatus.pending, JobStatus.extracting):
+        ocr_state, ocr_msg = "in_progress", "Extracting…"
+    elif job.status == JobStatus.failed:
+        ocr_state, ocr_msg = "error", job.error or "Extraction failed"
+    elif has_ocr:
+        pg = job.page_count
+        ocr_msg   = f"{pg} page{'s' if pg != 1 else ''}" if pg else "Complete"
+        ocr_state = "complete"
+    else:
+        ocr_state, ocr_msg = "ready", "Run OCR extraction"
+    steps.append({"id": "ocr", "label": "OCR", "state": ocr_state,
+                  "required": True, "message": ocr_msg})
+
+    # ── Entities ──────────────────────────────────────────────────────────────
+    if not has_ocr:
+        ent_state, ent_msg = "locked", "OCR required first"
+    elif unresolved > 0:
+        ent_state = "needs_review"
+        ent_msg   = f"{unresolved} unresolved"
+    elif len(entities) == 0 and job.status in (JobStatus.reviewing,):
+        ent_state, ent_msg = "needs_review", "No entities — verify document"
+    else:
+        ent_state = "complete"
+        ent_msg   = f"{approved} approved, {dismissed} dismissed"
+    steps.append({
+        "id": "entities", "label": "Entities", "state": ent_state,
+        "required": True, "message": ent_msg,
+        "counts": {"approved": approved, "dismissed": dismissed, "unresolved": unresolved},
+    })
+
+    # ── OCR Check ─────────────────────────────────────────────────────────────
+    ocr_check_ws = ws.get("ocr_check", "pending")
+    if not has_ocr:
+        occ_state, occ_msg = "locked", "OCR required first"
+    elif ocr_check_ws == "skipped":
+        occ_state, occ_msg = "skipped", "Skipped"
+    elif job.status == JobStatus.normalizing:
+        occ_state, occ_msg = "in_progress", "Running…"
+    elif job.status in (JobStatus.normalized, JobStatus.done) or ocr_check_ws == "complete":
+        occ_state, occ_msg = "complete", "Approved"
+    else:
+        occ_state, occ_msg = "optional", "Recommended before export"
+    steps.append({
+        "id": "ocr_check", "label": "OCR Check", "state": occ_state,
+        "required": False, "recommended": True, "message": occ_msg,
+    })
+
+    # ── Export ────────────────────────────────────────────────────────────────
+    entities_done = ent_state == "complete"
+    if not has_ocr:
+        exp_state, exp_msg = "locked", "OCR required first"
+    elif not entities_done:
+        exp_state = "locked"
+        exp_msg   = f"Approve entities first ({unresolved} unresolved)" if unresolved else "Approve entities first"
+    elif job.status == JobStatus.exporting:
+        exp_state, exp_msg = "in_progress", "Exporting…"
+    elif has_export:
+        exp_state, exp_msg = "complete", "Package ready"
+    else:
+        exp_state, exp_msg = "ready", "Ready to export"
+    steps.append({"id": "export", "label": "Export", "state": exp_state,
+                  "required": True, "message": exp_msg})
+
+    # ── Reports ───────────────────────────────────────────────────────────────
+    reports_ws = ws.get("reports", "pending")
+    if reports_ws == "skipped":
+        rep_state, rep_msg = "skipped", "Skipped"
+    elif not has_ocr:
+        rep_state, rep_msg = "locked", "OCR required first"
+    elif report_exported:
+        rep_state, rep_msg = "complete", "Exported"
+    elif report_draft:
+        rep_state, rep_msg = "needs_review", "Draft ready"
+    else:
+        rep_state, rep_msg = "optional", "Optional"
+    steps.append({"id": "reports", "label": "Reports", "state": rep_state,
+                  "required": False, "message": rep_msg})
+
+    return {
+        "job_id":      job.id,
+        "steps":       steps,
+        "next_action": _compute_next_action(steps, unresolved),
+    }
+
+
+def _compute_next_action(steps: list, unresolved: int) -> dict | None:
+    m = {s["id"]: s for s in steps}
+    ocr = m.get("ocr", {});  ent = m.get("entities", {})
+    occ = m.get("ocr_check", {}); exp = m.get("export", {}); rep = m.get("reports", {})
+
+    if ocr.get("state") == "ready":
+        return {"label": "Run OCR Extraction", "target_step": "input", "action": "open_upload"}
+    if ocr.get("state") == "in_progress":
+        return {"label": "Processing…", "target_step": "ocr", "action": "wait"}
+    if ent.get("state") == "needs_review":
+        n = unresolved
+        return {"label": f"Review {n} entit{'y' if n==1 else 'ies'}",
+                "target_step": "entities", "action": "open_tab"}
+    if occ.get("state") == "optional":
+        return {"label": "Run OCR Check", "target_step": "ocr_check",
+                "action": "open_tab", "recommended": True}
+    if exp.get("state") == "ready":
+        return {"label": "Create Export Package", "target_step": "export", "action": "open_tab"}
+    if rep.get("state") in ("optional", "needs_review"):
+        return {"label": "Build Report", "target_step": "reports",
+                "action": "open_tab", "optional": True}
+    if exp.get("state") == "complete":
+        return {"label": "All done", "target_step": None, "action": "done"}
+    return None
+
+
 @router.get("/api/jobs/{job_id}/audit")
 def get_audit(job_id: str):
     return audit_log.read(job_id)

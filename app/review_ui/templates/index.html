@@ -193,11 +193,61 @@ main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 /* ── Detail pane ─────────────────────────────────────────── */
 #detail-pane { display: none; flex: 1; flex-direction: column; overflow: hidden; }
 
-.detail-header { padding: 16px 24px; border-bottom: 1px solid var(--border);
+.detail-header { padding: 12px 20px; border-bottom: 1px solid var(--border);
                  display: flex; align-items: flex-start; gap: 16px; flex-shrink: 0; }
-.detail-header h2 { font-size: 16px; font-weight: 600; }
-.detail-header .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.detail-header h2 { font-size: 15px; font-weight: 600; }
+.detail-header .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .detail-header .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+/* ── Pipeline status rail ────────────────────────────────────── */
+#pipeline-rail {
+  display: none; flex-shrink: 0;
+  align-items: center; gap: 0;
+  padding: 0 16px;
+  height: 36px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  overflow-x: auto;
+}
+#pipeline-steps { display: flex; align-items: center; flex: 1; gap: 0; min-width: 0; overflow: hidden; }
+.pipe-step {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+  cursor: pointer; transition: background .1s; border: none; background: transparent;
+}
+.pipe-sep { color: var(--muted); padding: 0 2px; font-size: 12px; flex-shrink: 0; }
+.pipe-step.state-complete    { color: #16a34a; background: rgba(22,163,74,.1); }
+.pipe-step.state-needs_review{ color: #d97706; background: rgba(217,119,6,.1); }
+.pipe-step.state-in_progress { color: #2563eb; background: rgba(37,99,235,.1); }
+.pipe-step.state-ready       { color: #2563eb; background: rgba(37,99,235,.08); }
+.pipe-step.state-locked      { color: var(--muted); cursor: default; }
+.pipe-step.state-optional    { color: var(--muted); }
+.pipe-step.state-skipped     { color: var(--muted); opacity: .6; }
+.pipe-step.state-error       { color: var(--danger); background: rgba(239,68,68,.1); }
+#next-action-btn { flex-shrink: 0; margin-left: 12px; font-size: 11px; padding: 4px 12px; }
+
+/* ── Tab row (separate from header) ─────────────────────────── */
+#detail-tab-row {
+  display: none; flex-shrink: 0;
+  padding: 6px 16px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* ── Bottom action bar ───────────────────────────────────────── */
+#bottom-action-bar {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  min-height: 46px;
+}
+#action-bar-status { flex: 1; font-size: 12px; color: var(--muted); }
+#action-bar-buttons { display: flex; gap: 7px; align-items: center; flex-shrink: 0; }
 
 .detail-body { flex: 1; display: flex; overflow: hidden; }
 
@@ -1065,8 +1115,7 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
           </div>
           <div class="meta" id="detail-meta"></div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
-          <div class="view-tabs" id="view-tabs"></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto" id="detail-context-actions">
           <button class="btn btn-ghost btn-sm" id="view-pdf-btn" style="display:none" data-tip="Open the original PDF alongside the anonymized text for side-by-side review">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -1074,8 +1123,19 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
             </svg>
             Compare PDF
           </button>
-          <div class="actions" id="detail-actions"></div>
+          <!-- contextual buttons (e.g. Sync to server) injected here -->
         </div>
+      </div>
+
+      <!-- Pipeline status rail -->
+      <div id="pipeline-rail">
+        <div id="pipeline-steps"></div>
+        <button id="next-action-btn" class="btn btn-sm btn-primary" style="display:none"></button>
+      </div>
+
+      <!-- Tab row -->
+      <div id="detail-tab-row">
+        <div class="view-tabs" id="view-tabs"></div>
       </div>
 
       <div id="content-row" style="flex:1;display:flex;overflow:hidden">
@@ -1470,6 +1530,12 @@ mark.highlight.manual-mark { background: #1a2a10; color: #8cd060;
         </div>
       </div><!-- /#report-pane -->
 
+      <!-- Persistent bottom action bar — content injected per active tab -->
+      <div id="bottom-action-bar">
+        <span id="action-bar-status"></span>
+        <div id="action-bar-buttons"></div>
+      </div>
+
       </div><!-- /#content-col -->
 
       <!-- PDF side panel — flex sibling of content-col, visible across all tabs -->
@@ -1807,12 +1873,15 @@ function renderDetail() {
 
   updateZone1(j);
   renderViewTabs(j);
-  renderActions(j);
+  renderContextActions(j);
   renderEntities(j);
   renderTextPreview(j);
   renderExportBar(j);
   // Restore view mode after re-render
   setViewMode(viewMode, j);
+  // Async: fetch pipeline state, then render rail + bottom bar
+  _pipelineState = null;
+  _fetchAndRenderPipeline(j.id);
 }
 
 function renderViewTabs(j) {
@@ -1849,6 +1918,12 @@ function setViewMode(mode, j) {
   inlineWrap.style.display    = "none";
   llmExportPane.style.display = "none";
 
+  // Show rail and tab row whenever a job is loaded
+  const rail   = document.getElementById("pipeline-rail");
+  const tabRow = document.getElementById("detail-tab-row");
+  if (rail)   rail.style.display   = j ? "flex" : "none";
+  if (tabRow) tabRow.style.display = j ? "block" : "none";
+
   if (mode === "ocr") {
     ocrPane.style.display = "flex";
     ocrPane.style.flexDirection = "column";
@@ -1874,89 +1949,225 @@ function setViewMode(mode, j) {
     }
   }
   updatePdfBtn(j);
+  // Render bottom action bar using cached pipeline state (may be null on first call)
+  renderBottomActionBar(mode, j, _pipelineState);
 }
 
-function renderActions(j) {
-  const el = document.getElementById("detail-actions");
-  let html = "";
+// ── Context actions (header right — job-contextual only) ────────────────────
+function renderContextActions(j) {
+  const el = document.getElementById("detail-context-actions");
+  if (!el) return;
 
-  if (["pending","extracting"].includes(j.status)) {
-    html = `<span class="proc-badge"><span class="spinner"></span>Processing…</span>`;
-  } else if (j.status === "reviewing" || j.status === "approved") {
-    const approved = j.entities.filter(e=>e.approved).length;
-    const total = j.entities.length;
-    html = `
-      <span style="font-size:12px;color:var(--muted)">${approved}/${total} approved</span>
-      <button class="btn btn-ghost btn-sm" id="btn-redetect" data-tip="Re-run entity detection — useful if you edited the extracted text">↺ Re-detect</button>
-      <button class="btn btn-ghost btn-sm" id="btn-approve-all" data-tip="Approve all detected entities and generate pseudonymized export. This finalises Zone 1 review." data-tip-color="red">Approve All</button>
-      ${j.reviewed_md ? `<button class="btn btn-ghost btn-sm" id="btn-normalize" data-tip="Run OCR quality check — detects garbled text, missing tokens, and formatting issues">OCR Check</button>` : ""}
-    `;
-  } else if (j.status === "normalizing") {
-    html = `<span style="font-size:12px;color:var(--warning)">OCR Check in progress</span>`;
-  } else if (j.status === "normalized") {
-    html = `
-      <span style="font-size:12px;color:var(--success)">✓ Normalized</span>
-      <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr" data-tip="Reopen the OCR Check editor to make further corrections">↩ Edit OCR Check</button>
-    `;
-  } else if (j.status === "exporting") {
-    html = `<span class="proc-badge"><span class="spinner"></span>Exporting…</span>`;
-  } else if (j.status === "done") {
-    const approved = j.entities.filter(e=>e.approved).length;
-    const total = j.entities.length;
-    html = `
-      <span style="font-size:12px;color:var(--success)">✓ Complete</span>
-      <span style="font-size:12px;color:var(--muted)">${approved}/${total} approved</span>
-      <button class="btn btn-ghost btn-sm" id="btn-approve-all" data-tip="Approve all detected entities and generate pseudonymized export. This finalises Zone 1 review." data-tip-color="red">Approve All</button>
-      <button class="btn btn-ghost btn-sm" id="btn-redetect" data-tip="Re-run entity detection — useful if you edited the extracted text">↺ Re-detect</button>
-      <button class="btn btn-ghost btn-sm" id="btn-reopen-ocr" data-tip="Reopen the OCR Check editor to make further corrections">↩ Edit OCR Check</button>
-    `;
-  } else if (j.status === "failed") {
-    html = `<span style="font-size:12px;color:var(--danger)">✗ Failed</span>`;
-  }
-
-  // Append "Sync to server" for SFTP gateway jobs
   const isSftpGw = j.ingest_source_type === "sftp_gateway" && j.ingest_source_id;
   const canSync  = isSftpGw && !["pending","processing","extracting"].includes(j.status);
+
+  // Remove previous sync button if any (Compare PDF btn is permanent)
+  el.querySelector("#btn-sftp-sync")?.remove();
+
   if (canSync) {
-    html += `<button class="btn btn-ghost btn-sm" id="btn-sftp-sync" title="Push all exports to SFTP server">↑ Sync to server</button>`;
+    const btn = document.createElement("button");
+    btn.id = "btn-sftp-sync";
+    btn.className = "btn btn-ghost btn-sm";
+    btn.title = "Push all exports to SFTP server";
+    btn.textContent = "↑ Sync to server";
+    btn.addEventListener("click", async () => {
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = "Syncing…";
+      try {
+        const res = await api(
+          `/api/gateway/sftp/${j.ingest_source_id}/push-exports/${j.id}`,
+          {method: "POST"},
+        );
+        showToast(res.pushed?.length
+          ? `Synced ${res.pushed.length} file(s) to ${res.remote_dir}`
+          : (res.message || "Nothing to sync yet"));
+      } catch(e) { showToast(e.message || "Sync failed", "error"); }
+      finally { btn.disabled = false; btn.textContent = orig; }
+    });
+    el.appendChild(btn);
+  }
+}
+
+// backward-compat alias — callers updated progressively
+function renderActions(j) { renderContextActions(j); }
+
+// ── Pipeline state + rail ─────────────────────────────────────────────────────
+let _pipelineState = null;
+
+async function _fetchAndRenderPipeline(jobId) {
+  try {
+    const state = await api(`/api/jobs/${jobId}/pipeline-state`);
+    _pipelineState = state;
+    renderPipelineRail(state);
+    renderBottomActionBar(viewMode, currentJob, state);
+  } catch(_) { /* rail stays empty — non-blocking */ }
+}
+
+const _STEP_ICON = {
+  complete:     "✓",
+  needs_review: "●",
+  in_progress:  "◌",
+  locked:       "🔒",
+  optional:     "○",
+  skipped:      "⊘",
+  error:        "✗",
+  ready:        "→",
+};
+
+function renderPipelineRail(state) {
+  const rail     = document.getElementById("pipeline-rail");
+  const stepsEl  = document.getElementById("pipeline-steps");
+  const nextBtn  = document.getElementById("next-action-btn");
+  if (!rail || !stepsEl || !state) return;
+
+  stepsEl.innerHTML = state.steps.map((step, i) => {
+    const icon    = _STEP_ICON[step.state] || "○";
+    const tip     = step.message || step.label;
+    const isLocked = step.state === "locked";
+    const badge   = step.id === "entities" && step.counts?.unresolved > 0
+      ? ` <span style="font-size:9px;opacity:.7">${step.counts.unresolved}</span>` : "";
+    const sep     = i > 0 ? '<span class="pipe-sep">›</span>' : "";
+    return `${sep}<button class="pipe-step state-${step.state}" data-step="${step.id}"
+              data-tip="${escHtml(tip)}" ${isLocked ? "disabled" : ""}>
+              ${icon} ${escHtml(step.label)}${badge}</button>`;
+  }).join("");
+
+  stepsEl.querySelectorAll(".pipe-step[data-step]:not([disabled])").forEach(el => {
+    el.addEventListener("click", () => _navigateToStep(el.dataset.step));
+  });
+
+  const next = state.next_action;
+  if (!next || next.action === "done") {
+    if (next?.action === "done") {
+      nextBtn.textContent = "✓ All done";
+      nextBtn.className   = "btn btn-sm btn-ghost";
+      nextBtn.disabled    = true;
+      nextBtn.style.display = "";
+    } else {
+      nextBtn.style.display = "none";
+    }
+  } else if (next.action === "wait") {
+    nextBtn.textContent   = "Processing…";
+    nextBtn.className     = "btn btn-sm btn-ghost";
+    nextBtn.disabled      = true;
+    nextBtn.style.display = "";
+  } else {
+    const prefix = next.recommended ? "Recommended: " : next.optional ? "Optional: " : "";
+    nextBtn.textContent   = prefix + next.label;
+    nextBtn.className     = "btn btn-sm " + (next.optional || next.recommended ? "btn-ghost" : "btn-primary");
+    nextBtn.disabled      = false;
+    nextBtn.dataset.targetStep = next.target_step || "";
+    nextBtn.dataset.action     = next.action || "";
+    nextBtn.style.display = "";
+  }
+}
+
+document.getElementById("next-action-btn")?.addEventListener("click", function() {
+  _navigateToStep(this.dataset.targetStep, this.dataset.action);
+});
+
+function _navigateToStep(stepId, action) {
+  const tabMap = { entities:"entities", ocr_check:"ocr", export:"policy", reports:"report", mapping:"mapping" };
+  if (action === "open_upload" || stepId === "input" || stepId === "ocr") {
+    showUploadPane();
+  } else if (tabMap[stepId] && currentJob) {
+    viewMode = tabMap[stepId];
+    renderDetail();
+  }
+}
+
+// ── Bottom action bar ─────────────────────────────────────────────────────────
+function renderBottomActionBar(mode, j, state) {
+  const bar      = document.getElementById("bottom-action-bar");
+  const statusEl = document.getElementById("action-bar-status");
+  const btnsEl   = document.getElementById("action-bar-buttons");
+  if (!bar) return;
+
+  if (!j || mode === "ocr" || mode === "mapping") {
+    bar.style.display = "none"; return;
   }
 
-  el.innerHTML = html;
+  const cfg = mode === "entities" ? _entityBarConfig(j, state)
+            : mode === "policy"   ? _policyBarConfig(j, state)
+            : mode === "report"   ? _reportBarConfig()
+            : null;
 
-  el.querySelector("#btn-sftp-sync")?.addEventListener("click", async () => {
-    const btn = el.querySelector("#btn-sftp-sync");
-    const orig = btn.textContent;
-    btn.disabled = true; btn.textContent = "Syncing…";
-    try {
-      const res = await api(
-        `/api/gateway/sftp/${j.ingest_source_id}/push-exports/${j.id}`,
-        {method: "POST"},
-      );
-      showToast(res.pushed?.length
-        ? `Synced ${res.pushed.length} file(s) to ${res.remote_dir}`
-        : (res.message || "Nothing to sync yet"));
-    } catch(e) { showToast(e.message || "Sync failed", "error"); }
-    finally { btn.disabled = false; btn.textContent = orig; }
-  });
+  if (!cfg) { bar.style.display = "none"; return; }
 
-  el.querySelector("#btn-redetect")?.addEventListener("click", redetect);
-  el.querySelector("#btn-approve-all")?.addEventListener("click", approveAll);
-  el.querySelector("#btn-normalize")?.addEventListener("click", () => {
-    const inlineDetails = document.getElementById("ocr-inline-details");
-    inlineDetails.open = true;
-    inlineDetails.scrollIntoView({behavior: "smooth", block: "nearest"});
+  bar.style.display = "flex";
+  statusEl.innerHTML  = cfg.status || "";
+  btnsEl.innerHTML = (cfg.buttons || []).map(b =>
+    `<button class="btn btn-sm ${escHtml(b.cls || 'btn-ghost')}" id="${escHtml(b.id)}"
+             ${b.tip ? `data-tip="${escHtml(b.tip)}"` : ""}
+             ${b.tc  ? `data-tip-color="${escHtml(b.tc)}"` : ""}>
+       ${escHtml(b.label)}</button>`
+  ).join("");
+
+  (cfg.buttons || []).forEach(b => {
+    const el = document.getElementById(b.id);
+    if (!el) return;
+    if (b.id === "bar-redetect")              el.addEventListener("click", redetect);
+    if (b.id === "bar-approve-all")           el.addEventListener("click", approveAll);
+    if (b.id === "bar-goto-export")           el.addEventListener("click", () => { viewMode="policy"; renderDetail(); });
+    if (b.id === "bar-goto-entities")         el.addEventListener("click", () => { viewMode="entities"; renderDetail(); });
+    if (b.id === "bar-goto-reports")          el.addEventListener("click", () => { viewMode="report"; renderDetail(); });
+    if (b.id === "bar-report-pdf")            el.addEventListener("click", _exportReportPdf);
+    if (b.id === "bar-report-html")           el.addEventListener("click", _exportReportHtml);
   });
-  el.querySelector("#btn-reopen-ocr")?.addEventListener("click", async () => {
-    try {
-      currentJob = await api(`/api/jobs/${currentJob.id}/normalize/reopen`, {method:"POST"});
-      renderDetail();
-      renderJobList();
-      const inlineDetails = document.getElementById("ocr-inline-details");
-      inlineDetails.open = true;
-      await loadOcrInlinePanel(currentJob);
-      showToast("OCR Check reopened — continue editing");
-    } catch(e) { showToast(e.message, "error"); }
-  });
+}
+
+function _entityBarConfig(j, state) {
+  const ent      = state?.steps?.find(s => s.id === "entities");
+  const counts   = ent?.counts || {};
+  const unresolved = counts.unresolved ?? 0;
+
+  if (["pending","extracting"].includes(j.status))
+    return { status: '<span class="proc-badge"><span class="spinner"></span>OCR in progress…</span>', buttons: [] };
+  if (j.status === "failed")
+    return { status: '<span style="color:var(--danger)">Extraction failed — check OCR settings.</span>', buttons: [] };
+  if (!ent || ent.state === "locked")
+    return { status: "Run OCR extraction first.", buttons: [] };
+  if (ent.state === "needs_review")
+    return {
+      status: `<strong>${unresolved}</strong> unresolved ${unresolved === 1 ? "entity" : "entities"} — approve or dismiss each one before export.`,
+      buttons: [
+        { id:"bar-redetect",   label:"↺ Re-detect", cls:"btn-ghost", tip:"Re-run LLM entity detection" },
+        { id:"bar-approve-all",label:"Approve All",  cls:"btn-primary", tip:"Approve all and generate pseudonymized export", tc:"red" },
+      ],
+    };
+  return {
+    status: "All entities resolved — export is available.",
+    buttons: [
+      { id:"bar-redetect",   label:"↺ Re-detect",       cls:"btn-ghost", tip:"Re-run entity detection" },
+      { id:"bar-goto-export",label:"Continue to Export →", cls:"btn-primary" },
+    ],
+  };
+}
+
+function _policyBarConfig(j, state) {
+  const exp = state?.steps?.find(s => s.id === "export");
+  if (!exp) return null;
+  if (exp.state === "locked")
+    return {
+      status: `<span style="color:var(--warning)">Export locked — ${escHtml(exp.message)}</span>`,
+      buttons: [{ id:"bar-goto-entities", label:"← Go to Entities", cls:"btn-ghost" }],
+    };
+  if (exp.state === "complete")
+    return {
+      status: "Export package created.",
+      buttons: [{ id:"bar-goto-reports", label:"Continue to Reports →", cls:"btn-primary" }],
+    };
+  return { status: "Create a privacy-aware export package.", buttons: [] };
+}
+
+function _reportBarConfig() {
+  return {
+    status: "Edit the Markdown and preview before exporting.",
+    buttons: [
+      { id:"bar-report-html", label:"Export HTML", cls:"btn-ghost" },
+      { id:"bar-report-pdf",  label:"Export PDF",  cls:"btn-primary" },
+    ],
+  };
 }
 
 function renderEntities(j) {
@@ -2270,7 +2481,7 @@ pickerConfirm.addEventListener("click", async () => {
     currentJob = await api(`/api/jobs/${currentJob.id}/entities`, {method:"POST", body:fd});
     renderEntities(currentJob);
     renderTextPreview(currentJob);
-    renderActions(currentJob);
+    _fetchAndRenderPipeline(currentJob.id);
     showToast(`Added ${pickerSelection?.label || "entity"} — will survive Re-detect`);
   } catch(e) {
     showToast(e.message || "Failed to add entity", "error");
